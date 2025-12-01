@@ -46,8 +46,11 @@ def analyze_hand_gesture(landmarks: List[Dict[str, float]]) -> Dict[str, Any]:
     
     # Calculate relative positions
     thumb_up = thumb_tip['y'] < wrist['y'] - 0.1
+    thumb_down = thumb_tip['y'] > wrist['y'] + 0.1
     index_up = index_tip['y'] < index_pip['y']
     middle_up = middle_tip['y'] < middle_pip['y']
+    ring_up = ring_tip['y'] < wrist['y']
+    pinky_up = pinky_tip['y'] < wrist['y']
     
     # Calculate distances
     thumb_index_dist = ((thumb_tip['x'] - index_tip['x'])**2 + (thumb_tip['y'] - index_tip['y'])**2)**0.5
@@ -55,8 +58,11 @@ def analyze_hand_gesture(landmarks: List[Dict[str, float]]) -> Dict[str, Any]:
     return {
         "valid": True,
         "thumb_up": thumb_up,
+        "thumb_down": thumb_down,
         "index_up": index_up,
         "middle_up": middle_up,
+        "ring_up": ring_up,
+        "pinky_up": pinky_up,
         "thumb_index_close": thumb_index_dist < 0.05,
         "hand_height": wrist['y'],
         "hand_center_x": wrist['x']
@@ -87,44 +93,78 @@ def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str,
     if not hand_features:
         return "Unknown", 0.0
     
-    # Basic gesture recognition based on hand features
+    # Enhanced gesture recognition based on hand features
     if num_hands == 1:
         hand = hand_features[0]
         
-        # Thumbs up gesture
-        if hand["thumb_up"] and not hand["index_up"]:
-            return "YES", 0.85
+        # Thumbs up gesture (clear YES)
+        if hand["thumb_up"] and not hand["index_up"] and not hand["middle_up"]:
+            return "YES", 0.90
         
-        # Index finger pointing up
-        elif hand["index_up"] and not hand["middle_up"]:
-            return "HELLO", 0.80
+        # Thumbs down gesture (clear NO)
+        elif not hand["thumb_up"] and hand["thumb_down"]:
+            return "NO", 0.88
+        
+        # Index finger pointing up (HELLO or pointing)
+        elif hand["index_up"] and not hand["middle_up"] and not hand["ring_up"]:
+            if hand["hand_height"] < 0.4:  # High position = wave
+                return "HELLO", 0.85
+            else:
+                return "GOOD", 0.80
+        
+        # Peace sign (index and middle up)
+        elif hand["index_up"] and hand["middle_up"] and not hand["ring_up"]:
+            return "PEACE", 0.87
         
         # OK sign (thumb and index close)
-        elif hand["thumb_index_close"]:
-            return "GOOD", 0.82
+        elif hand["thumb_index_close"] and not hand["middle_up"]:
+            return "GOOD", 0.85
         
-        # Hand wave (high position)
-        elif hand["hand_height"] < 0.3:
-            return "HELLO", 0.75
+        # Open palm (all fingers up)
+        elif hand["index_up"] and hand["middle_up"] and hand["ring_up"]:
+            if hand["hand_height"] < 0.3:  # High = hello
+                return "HELLO", 0.82
+            else:
+                return "PLEASE", 0.78
+        
+        # Closed fist
+        elif not any([hand["thumb_up"], hand["index_up"], hand["middle_up"], hand["ring_up"]]):
+            return "NO", 0.75
+        
+        # Hand wave (high position, moderate confidence)
+        elif hand["hand_height"] < 0.35:
+            return "HELLO", 0.70
         
         else:
-            return "PLEASE", 0.70
+            # Default to a common gesture
+            return "PLEASE", 0.65
             
     elif num_hands == 2:
-        # Two hand gestures
+        # Two hand gestures - more sophisticated detection
         left_hand = hand_features[0]
         right_hand = hand_features[1] if len(hand_features) > 1 else hand_features[0]
         
-        # Both hands up
-        if left_hand["hand_height"] < 0.4 and right_hand["hand_height"] < 0.4:
-            return "THANK_YOU", 0.88
+        # Both hands high up (celebration/hello)
+        if left_hand["hand_height"] < 0.3 and right_hand["hand_height"] < 0.3:
+            return "HELLO", 0.90
         
-        # Hands together (prayer position)
-        elif abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) < 0.2:
-            return "PLEASE", 0.85
+        # Hands together at center (prayer/thank you)
+        elif abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) < 0.15:
+            if left_hand["hand_height"] < 0.5 and right_hand["hand_height"] < 0.5:
+                return "THANK_YOU", 0.92
+            else:
+                return "PLEASE", 0.88
+        
+        # Both thumbs up
+        elif left_hand["thumb_up"] and right_hand["thumb_up"]:
+            return "LOVE", 0.95
+        
+        # Hands apart (wide gesture)
+        elif abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) > 0.4:
+            return "GOOD", 0.80
         
         else:
-            return "HELLO", 0.75
+            return "THANK_YOU", 0.75
     
     # Default case - unknown gesture
     return "Unknown", 0.50
