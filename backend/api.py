@@ -1,5 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from websocket_manager import websocket_manager
+from model_service import get_model_service
 import json
 import logging
 import random
@@ -194,9 +195,18 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                     pose_data = json_data.get("data", [])
                     logger.info(f"Received pose data: {len(pose_data)} hands")
                     
-                    # Process pose data for sign recognition
-                    # TODO: Replace with actual ML model prediction
-                    predicted_word, confidence = process_sign_language(pose_data)
+                    # Try to use ML model, fallback to rule-based
+                    model_service = get_model_service()
+                    if model_service.is_loaded():
+                        try:
+                            predicted_word, confidence = model_service.predict(pose_data)
+                            logger.info(f"ML Model prediction: {predicted_word} ({confidence:.2f})")
+                        except Exception as e:
+                            logger.warning(f"ML model prediction failed: {e}. Using fallback.")
+                            predicted_word, confidence = process_sign_language(pose_data)
+                    else:
+                        # Use rule-based fallback
+                        predicted_word, confidence = process_sign_language(pose_data)
                     
                     # Send prediction back to client
                     response = {

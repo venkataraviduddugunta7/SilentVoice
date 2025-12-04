@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api import router
+from model_service import get_model_service
 import uvicorn
 import logging
+import os
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +51,15 @@ async def startup_event():
     logger.info("🚀 SilentVoice backend starting up...")
     logger.info("📡 WebSocket endpoint available at: ws://localhost:8000/api/v1/ws/sign")
     logger.info("📚 API documentation available at: http://localhost:8000/docs")
+    
+    # Try to load ML model
+    model_path = os.getenv('MODEL_PATH', 'models/sign_language_model.h5')
+    model_service = get_model_service()
+    if model_service.load_model(model_path):
+        logger.info("✅ ML Model loaded successfully")
+    else:
+        logger.info("⚠️  ML Model not found. Using rule-based fallback.")
+        logger.info("   To train a model, run: python train_model.py")
 
 # Shutdown event
 @app.on_event("shutdown")
