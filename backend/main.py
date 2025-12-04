@@ -22,7 +22,12 @@ app = FastAPI(
 # Configure CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Next.js default ports
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3005",
+        "http://127.0.0.1:3005"
+    ],  # Next.js ports
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,6 +59,10 @@ async def startup_event():
     
     # Try to load ML model
     model_path = os.getenv('MODEL_PATH', 'models/sign_language_model.h5')
+    
+    # Create models directory if it doesn't exist
+    os.makedirs(os.path.dirname(model_path) if os.path.dirname(model_path) else '.', exist_ok=True)
+    
     model_service = get_model_service()
     if model_service.load_model(model_path):
         logger.info("✅ ML Model loaded successfully")
