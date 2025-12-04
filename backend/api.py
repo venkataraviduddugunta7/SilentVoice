@@ -15,7 +15,7 @@ router = APIRouter()
 
 def analyze_hand_gesture(landmarks: List[Dict[str, float]]) -> Dict[str, Any]:
     """
-    Analyze hand landmarks to extract gesture features.
+    Enhanced hand gesture analysis for better basic sign recognition.
     
     Args:
         landmarks: List of 21 hand landmarks with x, y, z coordinates
@@ -28,45 +28,97 @@ def analyze_hand_gesture(landmarks: List[Dict[str, float]]) -> Dict[str, Any]:
     
     # Key landmark indices (MediaPipe hand model)
     WRIST = 0
+    THUMB_CMC = 1
+    THUMB_MCP = 2
+    THUMB_IP = 3
     THUMB_TIP = 4
-    INDEX_TIP = 8
-    MIDDLE_TIP = 12
-    RING_TIP = 16
-    PINKY_TIP = 20
+    INDEX_MCP = 5
     INDEX_PIP = 6
+    INDEX_DIP = 7
+    INDEX_TIP = 8
+    MIDDLE_MCP = 9
     MIDDLE_PIP = 10
+    MIDDLE_DIP = 11
+    MIDDLE_TIP = 12
+    RING_MCP = 13
+    RING_PIP = 14
+    RING_DIP = 15
+    RING_TIP = 16
+    PINKY_MCP = 17
+    PINKY_PIP = 18
+    PINKY_DIP = 19
+    PINKY_TIP = 20
     
+    # Extract key landmarks
     wrist = landmarks[WRIST]
     thumb_tip = landmarks[THUMB_TIP]
+    thumb_ip = landmarks[THUMB_IP]
     index_tip = landmarks[INDEX_TIP]
-    middle_tip = landmarks[MIDDLE_TIP]
-    ring_tip = landmarks[RING_TIP]
-    pinky_tip = landmarks[PINKY_TIP]
     index_pip = landmarks[INDEX_PIP]
+    index_mcp = landmarks[INDEX_MCP]
+    middle_tip = landmarks[MIDDLE_TIP]
     middle_pip = landmarks[MIDDLE_PIP]
+    ring_tip = landmarks[RING_TIP]
+    ring_pip = landmarks[RING_PIP]
+    pinky_tip = landmarks[PINKY_TIP]
+    pinky_pip = landmarks[PINKY_PIP]
     
-    # Calculate relative positions
-    thumb_up = thumb_tip['y'] < wrist['y'] - 0.1
-    thumb_down = thumb_tip['y'] > wrist['y'] + 0.1
-    index_up = index_tip['y'] < index_pip['y']
-    middle_up = middle_tip['y'] < middle_pip['y']
-    ring_up = ring_tip['y'] < wrist['y']
-    pinky_up = pinky_tip['y'] < wrist['y']
+    # Enhanced finger detection with better thresholds
+    # Thumb detection (different orientation)
+    thumb_up = thumb_tip['y'] < thumb_ip['y'] - 0.02
+    thumb_down = thumb_tip['y'] > wrist['y'] + 0.05
     
-    # Calculate distances
+    # Finger extension detection (more accurate)
+    index_extended = index_tip['y'] < index_pip['y'] - 0.02
+    middle_extended = middle_tip['y'] < middle_pip['y'] - 0.02
+    ring_extended = ring_tip['y'] < ring_pip['y'] - 0.02
+    pinky_extended = pinky_tip['y'] < pinky_pip['y'] - 0.02
+    
+    # Additional gesture features
+    # Distance calculations for gesture recognition
     thumb_index_dist = ((thumb_tip['x'] - index_tip['x'])**2 + (thumb_tip['y'] - index_tip['y'])**2)**0.5
+    
+    # Hand orientation and position
+    hand_height = wrist['y']
+    hand_center_x = wrist['x']
+    
+    # Gesture-specific calculations
+    # Open palm detection
+    all_fingers_up = index_extended and middle_extended and ring_extended and pinky_extended
+    
+    # Pointing detection
+    only_index_up = index_extended and not middle_extended and not ring_extended and not pinky_extended
+    
+    # Peace sign detection
+    peace_sign = index_extended and middle_extended and not ring_extended and not pinky_extended
+    
+    # Fist detection
+    all_fingers_down = not index_extended and not middle_extended and not ring_extended and not pinky_extended
+    
+    # Wave detection (hand movement would need temporal analysis)
+    wave_position = hand_height < 0.4 and hand_center_x > 0.3 and hand_center_x < 0.7
     
     return {
         "valid": True,
         "thumb_up": thumb_up,
         "thumb_down": thumb_down,
-        "index_up": index_up,
-        "middle_up": middle_up,
-        "ring_up": ring_up,
-        "pinky_up": pinky_up,
-        "thumb_index_close": thumb_index_dist < 0.05,
-        "hand_height": wrist['y'],
-        "hand_center_x": wrist['x']
+        "index_extended": index_extended,
+        "middle_extended": middle_extended,
+        "ring_extended": ring_extended,
+        "pinky_extended": pinky_extended,
+        "all_fingers_up": all_fingers_up,
+        "only_index_up": only_index_up,
+        "peace_sign": peace_sign,
+        "all_fingers_down": all_fingers_down,
+        "thumb_index_close": thumb_index_dist < 0.08,
+        "hand_height": hand_height,
+        "hand_center_x": hand_center_x,
+        "wave_position": wave_position,
+        # Legacy compatibility
+        "index_up": index_extended,
+        "middle_up": middle_extended,
+        "ring_up": ring_extended,
+        "pinky_up": pinky_extended
     }
 
 def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str, float]:
@@ -97,53 +149,56 @@ def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str,
         logger.debug("No valid hand features found")
         return "Unknown", 0.0
     
-    # Enhanced gesture recognition with better confidence scoring
+    # Enhanced gesture recognition for basic signs
     if num_hands == 1:
         hand = hand_features[0]
         
-        # Clear thumbs up gesture
-        if hand["thumb_up"] and not hand["index_up"] and not hand["middle_up"] and not hand["ring_up"]:
-            return "YES", 0.95
+        # HELLO - Open palm or wave position
+        if hand["all_fingers_up"] and hand["wave_position"]:
+            return "HELLO", 0.95
+        elif hand["all_fingers_up"] and hand["hand_height"] < 0.4:
+            return "HELLO", 0.90
         
-        # Clear thumbs down gesture
-        elif hand["thumb_down"] and not hand["index_up"] and not hand["middle_up"]:
-            return "NO", 0.93
+        # YES - Clear thumbs up
+        elif hand["thumb_up"] and hand["all_fingers_down"]:
+            return "YES", 0.98
+        elif hand["thumb_up"] and not hand["index_extended"]:
+            return "YES", 0.92
         
-        # Peace sign (V for victory) - index and middle up, others down
-        elif hand["index_up"] and hand["middle_up"] and not hand["ring_up"] and not hand["pinky_up"]:
-            return "PEACE", 0.92
+        # NO - Thumbs down or closed fist
+        elif hand["thumb_down"]:
+            return "NO", 0.95
+        elif hand["all_fingers_down"] and not hand["thumb_up"]:
+            return "NO", 0.85
         
-        # Pointing gesture - only index finger up
-        elif hand["index_up"] and not hand["middle_up"] and not hand["ring_up"] and not hand["pinky_up"]:
-            if hand["hand_height"] < 0.4:  # High position = greeting
-                return "HELLO", 0.88
+        # PEACE - V sign with index and middle fingers
+        elif hand["peace_sign"]:
+            return "PEACE", 0.96
+        
+        # GOOD - OK sign or pointing up
+        elif hand["thumb_index_close"] and hand["middle_extended"]:
+            return "GOOD", 0.93
+        elif hand["only_index_up"] and hand["hand_height"] > 0.4:
+            return "GOOD", 0.88
+        
+        # PLEASE - Open palm at medium height
+        elif hand["all_fingers_up"] and hand["hand_height"] > 0.4:
+            return "PLEASE", 0.87
+        
+        # Basic pointing or greeting
+        elif hand["only_index_up"]:
+            if hand["hand_height"] < 0.4:
+                return "HELLO", 0.82
             else:
-                return "GOOD", 0.85
+                return "GOOD", 0.80
         
-        # OK sign (thumb and index close, others extended)
-        elif hand["thumb_index_close"] and hand["middle_up"] and hand["ring_up"]:
-            return "GOOD", 0.90
+        # Any raised hand as potential greeting
+        elif hand["hand_height"] < 0.35:
+            return "HELLO", 0.70
         
-        # Open palm (all fingers up) - greeting or stop
-        elif hand["index_up"] and hand["middle_up"] and hand["ring_up"] and hand["pinky_up"]:
-            if hand["hand_height"] < 0.3:  # High position = hello
-                return "HELLO", 0.87
-            else:
-                return "PLEASE", 0.82
-        
-        # Closed fist - emphasis or no
-        elif not any([hand["index_up"], hand["middle_up"], hand["ring_up"], hand["pinky_up"]]):
-            if hand["thumb_up"]:
-                return "YES", 0.80  # Fist with thumb up
-            else:
-                return "NO", 0.78
-        
-        # Partial gestures with lower confidence
-        elif hand["hand_height"] < 0.35:  # High hand position
-            return "HELLO", 0.65
-        
+        # Default for any gesture
         else:
-            return "PLEASE", 0.60
+            return "HELLO", 0.55
             
     elif num_hands == 2:
         # Two hand gestures - enhanced detection
@@ -228,14 +283,15 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                         # Use rule-based fallback
                         predicted_word, confidence = process_sign_language(pose_data)
                     
-                    # Only send prediction if confidence is above threshold
-                    if confidence > 0.5 and predicted_word != "Unknown":
+                    # Send prediction with lower threshold for basic gestures
+                    if confidence > 0.4 and predicted_word != "Unknown":
                         response = {
                             "type": "prediction",
                             "word": predicted_word,
                             "confidence": confidence
                         }
                         await websocket_manager.send_json(websocket, response)
+                        logger.info(f"✅ Sent prediction: {predicted_word} ({confidence:.2f})")
                     else:
                         logger.debug(f"Low confidence prediction ignored: {predicted_word} ({confidence:.2f})")
                     
