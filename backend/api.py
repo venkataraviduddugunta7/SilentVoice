@@ -71,7 +71,7 @@ def analyze_hand_gesture(landmarks: List[Dict[str, float]]) -> Dict[str, Any]:
 
 def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str, float]:
     """
-    Process hand pose data and return predicted sign language word with confidence.
+    Enhanced sign language processing with better gesture recognition.
     
     Args:
         pose_data: List of hands, each containing list of landmarks with x, y, z coordinates
@@ -83,92 +83,107 @@ def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str,
         return "Unknown", 0.0
     
     num_hands = len(pose_data)
+    logger.debug(f"Processing {num_hands} hands for gesture recognition")
     
     # Analyze each hand
     hand_features = []
-    for hand_landmarks in pose_data:
+    for i, hand_landmarks in enumerate(pose_data):
         features = analyze_hand_gesture(hand_landmarks)
         if features["valid"]:
             hand_features.append(features)
+            logger.debug(f"Hand {i+1} features: {features}")
     
     if not hand_features:
+        logger.debug("No valid hand features found")
         return "Unknown", 0.0
     
-    # Enhanced gesture recognition based on hand features
+    # Enhanced gesture recognition with better confidence scoring
     if num_hands == 1:
         hand = hand_features[0]
         
-        # Thumbs up gesture (clear YES)
-        if hand["thumb_up"] and not hand["index_up"] and not hand["middle_up"]:
-            return "YES", 0.90
+        # Clear thumbs up gesture
+        if hand["thumb_up"] and not hand["index_up"] and not hand["middle_up"] and not hand["ring_up"]:
+            return "YES", 0.95
         
-        # Thumbs down gesture (clear NO)
-        elif not hand["thumb_up"] and hand["thumb_down"]:
-            return "NO", 0.88
+        # Clear thumbs down gesture
+        elif hand["thumb_down"] and not hand["index_up"] and not hand["middle_up"]:
+            return "NO", 0.93
         
-        # Index finger pointing up (HELLO or pointing)
-        elif hand["index_up"] and not hand["middle_up"] and not hand["ring_up"]:
-            if hand["hand_height"] < 0.4:  # High position = wave
-                return "HELLO", 0.85
+        # Peace sign (V for victory) - index and middle up, others down
+        elif hand["index_up"] and hand["middle_up"] and not hand["ring_up"] and not hand["pinky_up"]:
+            return "PEACE", 0.92
+        
+        # Pointing gesture - only index finger up
+        elif hand["index_up"] and not hand["middle_up"] and not hand["ring_up"] and not hand["pinky_up"]:
+            if hand["hand_height"] < 0.4:  # High position = greeting
+                return "HELLO", 0.88
             else:
-                return "GOOD", 0.80
+                return "GOOD", 0.85
         
-        # Peace sign (index and middle up)
-        elif hand["index_up"] and hand["middle_up"] and not hand["ring_up"]:
-            return "PEACE", 0.87
+        # OK sign (thumb and index close, others extended)
+        elif hand["thumb_index_close"] and hand["middle_up"] and hand["ring_up"]:
+            return "GOOD", 0.90
         
-        # OK sign (thumb and index close)
-        elif hand["thumb_index_close"] and not hand["middle_up"]:
-            return "GOOD", 0.85
-        
-        # Open palm (all fingers up)
-        elif hand["index_up"] and hand["middle_up"] and hand["ring_up"]:
-            if hand["hand_height"] < 0.3:  # High = hello
-                return "HELLO", 0.82
+        # Open palm (all fingers up) - greeting or stop
+        elif hand["index_up"] and hand["middle_up"] and hand["ring_up"] and hand["pinky_up"]:
+            if hand["hand_height"] < 0.3:  # High position = hello
+                return "HELLO", 0.87
             else:
-                return "PLEASE", 0.78
+                return "PLEASE", 0.82
         
-        # Closed fist
-        elif not any([hand["thumb_up"], hand["index_up"], hand["middle_up"], hand["ring_up"]]):
-            return "NO", 0.75
+        # Closed fist - emphasis or no
+        elif not any([hand["index_up"], hand["middle_up"], hand["ring_up"], hand["pinky_up"]]):
+            if hand["thumb_up"]:
+                return "YES", 0.80  # Fist with thumb up
+            else:
+                return "NO", 0.78
         
-        # Hand wave (high position, moderate confidence)
-        elif hand["hand_height"] < 0.35:
-            return "HELLO", 0.70
+        # Partial gestures with lower confidence
+        elif hand["hand_height"] < 0.35:  # High hand position
+            return "HELLO", 0.65
         
         else:
-            # Default to a common gesture
-            return "PLEASE", 0.65
+            return "PLEASE", 0.60
             
     elif num_hands == 2:
-        # Two hand gestures - more sophisticated detection
+        # Two hand gestures - enhanced detection
         left_hand = hand_features[0]
         right_hand = hand_features[1] if len(hand_features) > 1 else hand_features[0]
         
-        # Both hands high up (celebration/hello)
-        if left_hand["hand_height"] < 0.3 and right_hand["hand_height"] < 0.3:
-            return "HELLO", 0.90
+        # Both hands raised high (celebration/greeting)
+        if left_hand["hand_height"] < 0.25 and right_hand["hand_height"] < 0.25:
+            return "HELLO", 0.95
         
-        # Hands together at center (prayer/thank you)
-        elif abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) < 0.15:
-            if left_hand["hand_height"] < 0.5 and right_hand["hand_height"] < 0.5:
-                return "THANK_YOU", 0.92
+        # Prayer/thank you gesture - hands close together at center
+        elif abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) < 0.12:
+            if left_hand["hand_height"] < 0.6 and right_hand["hand_height"] < 0.6:
+                return "THANK_YOU", 0.96
             else:
-                return "PLEASE", 0.88
+                return "PLEASE", 0.90
         
-        # Both thumbs up
+        # Both thumbs up - love/approval
         elif left_hand["thumb_up"] and right_hand["thumb_up"]:
-            return "LOVE", 0.95
+            return "LOVE", 0.98
         
-        # Hands apart (wide gesture)
-        elif abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) > 0.4:
-            return "GOOD", 0.80
+        # Both hands showing peace signs
+        elif (left_hand["index_up"] and left_hand["middle_up"] and 
+              right_hand["index_up"] and right_hand["middle_up"]):
+            return "PEACE", 0.94
+        
+        # Hands spread wide apart - big/good gesture
+        elif abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) > 0.5:
+            return "GOOD", 0.85
+        
+        # Clapping motion (hands close, medium height)
+        elif (abs(left_hand["hand_center_x"] - right_hand["hand_center_x"]) < 0.2 and
+              left_hand["hand_height"] > 0.3 and right_hand["hand_height"] > 0.3):
+            return "GOOD", 0.83
         
         else:
-            return "THANK_YOU", 0.75
+            return "THANK_YOU", 0.70
     
-    # Default case - unknown gesture
-    return "Unknown", 0.50
+    # Default case
+    return "Unknown", 0.45
 
 @router.websocket("/ws/sign")
 async def websocket_sign_endpoint(websocket: WebSocket):
@@ -193,6 +208,11 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                 if json_data.get("type") == "pose":
                     # New SilentVoice format
                     pose_data = json_data.get("data", [])
+                    
+                    if not pose_data or len(pose_data) == 0:
+                        logger.warning("Received empty pose data")
+                        continue
+                    
                     logger.info(f"Received pose data: {len(pose_data)} hands")
                     
                     # Try to use ML model, fallback to rule-based
@@ -208,12 +228,16 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                         # Use rule-based fallback
                         predicted_word, confidence = process_sign_language(pose_data)
                     
-                    # Send prediction back to client
-                    response = {
-                        "type": "prediction",
-                        "word": predicted_word,
-                        "confidence": confidence
-                    }
+                    # Only send prediction if confidence is above threshold
+                    if confidence > 0.5 and predicted_word != "Unknown":
+                        response = {
+                            "type": "prediction",
+                            "word": predicted_word,
+                            "confidence": confidence
+                        }
+                        await websocket_manager.send_json(websocket, response)
+                    else:
+                        logger.debug(f"Low confidence prediction ignored: {predicted_word} ({confidence:.2f})")
                     
                 elif "landmarks" in json_data:
                     # Legacy format support
@@ -224,20 +248,21 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                     pose_data = [landmarks] if landmarks else []
                     predicted_word, confidence = process_sign_language(pose_data)
                     
-                    response = {
-                        "type": "prediction",
-                        "word": predicted_word,
-                        "confidence": confidence
-                    }
+                    # Only send if confidence is high enough
+                    if confidence > 0.5 and predicted_word != "Unknown":
+                        response = {
+                            "type": "prediction",
+                            "word": predicted_word,
+                            "confidence": confidence
+                        }
+                        await websocket_manager.send_json(websocket, response)
                 else:
                     logger.info(f"Received unknown data format: {json_data}")
                     response = {
                         "type": "error",
                         "message": "Unknown data format"
                     }
-                
-                # Send response back to client
-                await websocket_manager.send_json(websocket, response)
+                    await websocket_manager.send_json(websocket, response)
                 
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON received: {e}")
