@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api import router
-from model_service import get_model_service
+from services.inference import get_inference_service
 import uvicorn
 import logging
 import os
@@ -58,13 +58,13 @@ async def startup_event():
     logger.info("📚 API documentation available at: http://localhost:8000/docs")
     
     # Try to load ML model
-    model_path = os.getenv('MODEL_PATH', 'models/sign_language_model.h5')
+    model_path = os.getenv('MODEL_PATH', 'model/silentvoice.h5')
     
-    # Create models directory if it doesn't exist
+    # Create model directory if it doesn't exist
     os.makedirs(os.path.dirname(model_path) if os.path.dirname(model_path) else '.', exist_ok=True)
     
-    model_service = get_model_service()
-    if model_service.load_model(model_path):
+    inference_service = get_inference_service()
+    if inference_service.load_model(model_path):
         logger.info("✅ ML Model loaded successfully")
     else:
         logger.info("⚠️  ML Model not found. Using rule-based fallback.")
