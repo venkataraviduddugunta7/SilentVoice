@@ -30,20 +30,6 @@ fi
 
 echo "✅ All prerequisites are installed."
 
-# Check and kill processes on ports 8000 and 3000
-echo "🔍 Checking for existing processes on ports 8000 and 3000..."
-if lsof -ti:8000 >/dev/null 2>&1; then
-    echo "⚠️  Port 8000 is in use. Killing existing process..."
-    lsof -ti:8000 | xargs kill -9 2>/dev/null
-    sleep 1
-fi
-
-if lsof -ti:3000 >/dev/null 2>&1; then
-    echo "⚠️  Port 3000 is in use. Killing existing process..."
-    lsof -ti:3000 | xargs kill -9 2>/dev/null
-    sleep 1
-fi
-
 # Setup backend
 echo "🐍 Setting up backend..."
 cd backend
@@ -63,16 +49,6 @@ echo "🚀 Starting FastAPI backend..."
 uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
-# Wait a moment to check if backend started successfully
-sleep 3
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
-    echo "❌ Failed to start backend. Port 8000 might still be in use."
-    echo "   Try: lsof -ti:8000 | xargs kill -9"
-    exit 1
-fi
-
-echo "✅ Backend started (PID: $BACKEND_PID)"
-
 cd ..
 
 # Setup frontend
@@ -87,17 +63,6 @@ fi
 echo "🚀 Starting Next.js frontend..."
 npm run dev &
 FRONTEND_PID=$!
-
-# Wait a moment to check if frontend started successfully
-sleep 3
-if ! kill -0 $FRONTEND_PID 2>/dev/null; then
-    echo "❌ Failed to start frontend. Port 3000 might still be in use."
-    echo "   Try: lsof -ti:3000 | xargs kill -9"
-    kill $BACKEND_PID 2>/dev/null
-    exit 1
-fi
-
-echo "✅ Frontend started (PID: $FRONTEND_PID)"
 
 cd ..
 
