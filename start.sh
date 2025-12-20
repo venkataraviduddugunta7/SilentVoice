@@ -1,137 +1,58 @@
 #!/bin/bash
 
-# SilentVoice Startup Script
-# This script starts both the backend and frontend servers
+# Silent Voice - Start Script
+# This script starts both frontend and backend servers
 
-echo "🚀 Starting SilentVoice..."
+echo "🚀 Starting Silent Voice Application..."
+echo "=================================="
 
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# Check prerequisites
-echo "📋 Checking prerequisites..."
-
-if ! command_exists python3; then
-    echo "❌ Python 3 is required but not installed."
-    exit 1
-fi
-
-if ! command_exists node; then
-    echo "❌ Node.js is required but not installed."
-    exit 1
-fi
-
-if ! command_exists npm; then
-    echo "❌ npm is required but not installed."
-    exit 1
-fi
-
-echo "✅ All prerequisites are installed."
-
-# Check and kill processes on ports 8000 and 3000
-echo "🔍 Checking for existing processes on ports 8000 and 3000..."
-if lsof -ti:8000 >/dev/null 2>&1; then
-    echo "⚠️  Port 8000 is in use. Killing existing process..."
-    lsof -ti:8000 | xargs kill -9 2>/dev/null
-    sleep 1
-fi
-
-if lsof -ti:3000 >/dev/null 2>&1; then
-    echo "⚠️  Port 3000 is in use. Killing existing process..."
-    lsof -ti:3000 | xargs kill -9 2>/dev/null
-    sleep 1
-fi
-
-# Setup backend
-echo "🐍 Setting up backend..."
-cd backend
-
-if [ ! -d "venv" ]; then
-    echo "📦 Creating virtual environment..."
-    python3 -m venv venv
-fi
-
-echo "🔧 Activating virtual environment..."
-source venv/bin/activate
-
-echo "📥 Installing Python dependencies..."
-pip install -r requirements.txt
-
-echo "🚀 Starting FastAPI backend..."
-uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
-BACKEND_PID=$!
-
-# Wait a moment to check if backend started successfully
-sleep 3
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
-    echo "❌ Failed to start backend. Port 8000 might still be in use."
-    echo "   Try: lsof -ti:8000 | xargs kill -9"
-    exit 1
-fi
-
-echo "✅ Backend started (PID: $BACKEND_PID)"
-
-cd ..
-
-# Setup frontend
-echo "⚛️ Setting up frontend..."
-cd frontend
-
-if [ ! -d "node_modules" ]; then
-    echo "📦 Installing Node.js dependencies..."
-    npm install --legacy-peer-deps
-fi
-
-echo "🚀 Starting Next.js frontend..."
-npm run dev &
-FRONTEND_PID=$!
-
-# Wait a moment to check if frontend started successfully
-sleep 3
-if ! kill -0 $FRONTEND_PID 2>/dev/null; then
-    echo "❌ Failed to start frontend. Port 3000 might still be in use."
-    echo "   Try: lsof -ti:3000 | xargs kill -9"
-    kill $BACKEND_PID 2>/dev/null
-    exit 1
-fi
-
-echo "✅ Frontend started (PID: $FRONTEND_PID)"
-
-cd ..
-
-echo ""
-echo "🎉 SilentVoice is starting up!"
-echo ""
-echo "📡 Backend: http://localhost:8000"
-echo "   - API Docs: http://localhost:8000/docs"
-echo "   - WebSocket: ws://localhost:8000/api/v1/ws/sign"
-echo ""
-echo "🌐 Frontend: http://localhost:3000"
-echo ""
-echo "🎭 Features:"
-echo "   - Ready Player Me Avatar Integration"
-echo "   - Real-time Sign Language Recognition"
-echo "   - 3D Avatar Animations"
-echo "   - Modern Light UI Design"
-echo ""
-echo "📚 Development Guide: ./DEVELOPMENT_GUIDE.md"
-echo ""
-echo "Press Ctrl+C to stop both servers..."
-
-# Function to cleanup on exit
+# Function to kill processes on exit
 cleanup() {
-    echo ""
-    echo "🛑 Shutting down SilentVoice..."
+    echo -e "\n${YELLOW}Shutting down servers...${NC}"
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
-    echo "✅ Servers stopped."
-    exit 0
+    exit
 }
 
-# Set trap to cleanup on Ctrl+C
-trap cleanup SIGINT
+# Set up trap to catch Ctrl+C
+trap cleanup INT
 
-# Wait for both processes
+# Start Backend
+echo -e "${GREEN}Starting Backend Server...${NC}"
+cd backend
+python3 main.py &
+BACKEND_PID=$!
+echo "Backend PID: $BACKEND_PID"
+cd ..
+
+# Wait for backend to start
+sleep 3
+
+# Start Frontend
+echo -e "${GREEN}Starting Frontend Server...${NC}"
+cd frontend
+npm run dev &
+FRONTEND_PID=$!
+echo "Frontend PID: $FRONTEND_PID"
+cd ..
+
+# Display access information
+echo ""
+echo "=================================="
+echo -e "${GREEN}✅ Silent Voice is running!${NC}"
+echo "=================================="
+echo ""
+echo "📱 Frontend: http://localhost:3000"
+echo "🔌 Backend API: http://localhost:8000"
+echo "📚 API Docs: http://localhost:8000/docs"
+echo ""
+echo "Press Ctrl+C to stop all servers"
+echo ""
+
+# Keep script running
 wait

@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Html } from '@react-three/drei'
+import React, { useRef, useEffect, useState, Suspense } from 'react'
+import { Canvas, useFrame, useLoader } from '@react-three/fiber'
+import { OrbitControls, Html, useGLTF, useFBX, useAnimations } from '@react-three/drei'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
 
 // Sign pose data (simplified for demo - in production, load from database)
 const signPoses: Record<string, any> = {
