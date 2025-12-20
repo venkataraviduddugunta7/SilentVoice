@@ -72,9 +72,9 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
   
   useEffect(() => {
     if (clonedScene) {
-      // Find animation bones in the model
+      // Find animation bones in the model (type-safe version)
       clonedScene.traverse((child) => {
-        if (child.isBone) {
+        if ('isBone' in child && child.isBone) {
           const name = child.name.toLowerCase()
           if (name.includes('rightarm') || name.includes('right_arm') || name.includes('r_upperarm')) {
             bones.current.rightArm = child
