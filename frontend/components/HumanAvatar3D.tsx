@@ -12,40 +12,40 @@ const AVATAR_URL = 'https://models.readyplayer.me/694612141c1817592ce84efe.glb'
 // Sign language animations mapping - optimized for visibility
 const SIGN_ANIMATIONS = {
   hello: {
-    rightArm: { rotation: [-0.3, 0, -Math.PI/3], position: [0.5, 1.5, 0.5] },
-    rightHand: { rotation: [0, 0, Math.PI/8], waveAnimation: true },
+    rightArm: { rotation: [-0.3, 0, -Math.PI / 3], position: [0.5, 1.5, 0.5] },
+    rightHand: { rotation: [0, 0, Math.PI / 8], waveAnimation: true },
   },
   thank_you: {
-    rightArm: { rotation: [-Math.PI/6, 0, -0.2], position: [0.3, 1.2, 0.5] },
-    rightHand: { rotation: [Math.PI/4, 0, 0], moveForward: true },
+    rightArm: { rotation: [-Math.PI / 6, 0, -0.2], position: [0.3, 1.2, 0.5] },
+    rightHand: { rotation: [Math.PI / 4, 0, 0], moveForward: true },
   },
   yes: {
-    rightArm: { rotation: [-Math.PI/3, 0, -0.2], position: [0.3, 1.3, 0.4] },
-    rightHand: { rotation: [Math.PI/3, 0, 0], nodAnimation: true },
+    rightArm: { rotation: [-Math.PI / 3, 0, -0.2], position: [0.3, 1.3, 0.4] },
+    rightHand: { rotation: [Math.PI / 3, 0, 0], nodAnimation: true },
   },
   no: {
-    rightArm: { rotation: [-0.2, 0, -Math.PI/4], position: [0.4, 1.4, 0.3] },
-    rightHand: { rotation: [0, Math.PI/4, 0], shakeAnimation: true },
+    rightArm: { rotation: [-0.2, 0, -Math.PI / 4], position: [0.4, 1.4, 0.3] },
+    rightHand: { rotation: [0, Math.PI / 4, 0], shakeAnimation: true },
   },
   please: {
-    rightArm: { rotation: [-Math.PI/6, 0, -0.1], position: [0, 1.2, 0.4] },
+    rightArm: { rotation: [-Math.PI / 6, 0, -0.1], position: [0, 1.2, 0.4] },
     rightHand: { rotation: [0, 0, 0], circularMotion: true },
   },
   sorry: {
-    rightArm: { rotation: [-Math.PI/6, 0, -0.1], position: [0, 1.2, 0.4] },
-    rightHand: { rotation: [Math.PI/2, 0, 0], circularMotion: true },
+    rightArm: { rotation: [-Math.PI / 6, 0, -0.1], position: [0, 1.2, 0.4] },
+    rightHand: { rotation: [Math.PI / 2, 0, 0], circularMotion: true },
   },
   help: {
-    rightArm: { rotation: [-0.2, 0, -Math.PI/4], position: [0.3, 1.3, 0.3] },
-    leftArm: { rotation: [-Math.PI/3, 0, Math.PI/4], position: [-0.3, 1.2, 0.5] },
+    rightArm: { rotation: [-0.2, 0, -Math.PI / 4], position: [0.3, 1.3, 0.3] },
+    leftArm: { rotation: [-Math.PI / 3, 0, Math.PI / 4], position: [-0.3, 1.2, 0.5] },
   },
   love: {
-    rightArm: { rotation: [-Math.PI/3, Math.PI/6, 0], position: [0.2, 1.2, 0.4] },
-    leftArm: { rotation: [-Math.PI/3, -Math.PI/6, 0], position: [-0.2, 1.2, 0.4] },
+    rightArm: { rotation: [-Math.PI / 3, Math.PI / 6, 0], position: [0.2, 1.2, 0.4] },
+    leftArm: { rotation: [-Math.PI / 3, -Math.PI / 6, 0], position: [-0.2, 1.2, 0.4] },
   },
   goodbye: {
-    rightArm: { rotation: [-0.2, 0, -Math.PI/2.5], position: [0.5, 1.5, 0.4] },
-    rightHand: { rotation: [0, 0, Math.PI/6], waveAnimation: true },
+    rightArm: { rotation: [-0.2, 0, -Math.PI / 2.5], position: [0.5, 1.5, 0.4] },
+    rightHand: { rotation: [0, 0, Math.PI / 6], waveAnimation: true },
   }
 }
 
@@ -53,10 +53,10 @@ const SIGN_ANIMATIONS = {
 function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
   const group = useRef()
   const { scene } = useGLTF(AVATAR_URL)
-  
+
   // Clone the scene to avoid mutation issues
   const clonedScene = React.useMemo(() => scene.clone(), [scene])
-  
+
   // Animation bones
   const bones = useRef({
     rightArm: null,
@@ -65,11 +65,11 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
     leftHand: null,
     spine: null
   })
-  
+
   // Animation state
   const animationTime = useRef(0)
   const [currentSign, setCurrentSign] = useState(null)
-  
+
   useEffect(() => {
     if (clonedScene) {
       // Find animation bones in the model (type-safe version)
@@ -91,7 +91,7 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
       })
     }
   }, [clonedScene])
-  
+
   useEffect(() => {
     // Update current sign based on sequence
     if (signSequence) {
@@ -106,13 +106,13 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
       setCurrentSign(null)
     }
   }, [signSequence])
-  
+
   useFrame((state, delta) => {
     if (!isAnimating || !currentSign || !SIGN_ANIMATIONS[currentSign]) return
-    
+
     animationTime.current += delta
     const animation = SIGN_ANIMATIONS[currentSign]
-    
+
     // Animate right arm
     if (bones.current.rightArm && animation.rightArm) {
       const targetRotation = animation.rightArm.rotation
@@ -132,7 +132,7 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
         0.15
       )
     }
-    
+
     // Animate left arm
     if (bones.current.leftArm && animation.leftArm) {
       const targetRotation = animation.leftArm.rotation
@@ -152,7 +152,7 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
         0.15
       )
     }
-    
+
     // Animate hands with special animations - more visible
     if (bones.current.rightHand && animation.rightHand) {
       if (animation.rightHand.waveAnimation) {
@@ -167,7 +167,7 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
       }
     }
   })
-  
+
   return (
     <group ref={group} position={[0, -0.5, 0]} scale={1.5}>
       <primitive object={clonedScene} />
@@ -178,7 +178,7 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
 // Fallback Simple Avatar (only used if RPM avatar fails)
 function SimpleAvatar({ signSequence = '', isAnimating = false }) {
   const groupRef = useRef()
-  
+
   return (
     <group ref={groupRef} position={[0, -0.5, 0]} scale={1.2}>
       {/* Upper Body */}
@@ -186,13 +186,13 @@ function SimpleAvatar({ signSequence = '', isAnimating = false }) {
         <boxGeometry args={[0.8, 1, 0.4]} />
         <meshStandardMaterial color="#4A5568" />
       </mesh>
-      
+
       {/* Head */}
       <mesh position={[0, 0.9, 0]}>
         <sphereGeometry args={[0.3]} />
         <meshStandardMaterial color="#FDB5A6" />
       </mesh>
-      
+
       {/* Eyes */}
       <mesh position={[-0.08, 0.95, 0.25]}>
         <sphereGeometry args={[0.04]} />
@@ -202,7 +202,7 @@ function SimpleAvatar({ signSequence = '', isAnimating = false }) {
         <sphereGeometry args={[0.04]} />
         <meshStandardMaterial color="#2D3748" />
       </mesh>
-      
+
       {/* Arms - visible for signs */}
       <mesh position={[-0.5, 0.3, 0]}>
         <capsuleGeometry args={[0.08, 0.6, 4, 8]} />
@@ -212,7 +212,7 @@ function SimpleAvatar({ signSequence = '', isAnimating = false }) {
         <capsuleGeometry args={[0.08, 0.6, 4, 8]} />
         <meshStandardMaterial color="#FDB5A6" />
       </mesh>
-      
+
       {/* Hands */}
       <mesh position={[-0.5, -0.1, 0]}>
         <sphereGeometry args={[0.08]} />
@@ -229,7 +229,7 @@ function SimpleAvatar({ signSequence = '', isAnimating = false }) {
 // Avatar Scene Component
 function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe }) {
   const [avatarError, setAvatarError] = useState(false)
-  
+
   return (
     <>
       {/* Lighting optimized for sign language */}
@@ -238,7 +238,7 @@ function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe }) {
       <directionalLight position={[-5, 5, 5]} intensity={0.8} />
       <spotLight position={[0, 3, 3]} intensity={0.5} angle={0.6} penumbra={0.5} />
       <pointLight position={[0, 0, 2]} intensity={0.3} />
-      
+
       {/* Avatar Selection */}
       {useReadyPlayerMe && !avatarError ? (
         <Suspense fallback={
@@ -249,26 +249,26 @@ function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe }) {
             </div>
           </Html>
         }>
-          <ReadyPlayerMeAvatar 
-            signSequence={signSequence} 
+          <ReadyPlayerMeAvatar
+            signSequence={signSequence}
             isAnimating={isAnimating}
           />
         </Suspense>
       ) : (
-        <SimpleAvatar 
-          signSequence={signSequence} 
+        <SimpleAvatar
+          signSequence={signSequence}
           isAnimating={isAnimating}
         />
       )}
-      
+
       {/* Camera Controls */}
-      <OrbitControls 
-        target={[0, 1, 0]}
+      <OrbitControls
+        target={[0, 1.45, 0]}
         enablePan={false}
         enableZoom={true}
         maxPolarAngle={Math.PI / 2.2}
         minPolarAngle={Math.PI / 3.5}
-        maxDistance={2.2}
+        maxDistance={4.0}
         minDistance={1}
         autoRotate={false}
         enableRotate={true}
@@ -279,17 +279,17 @@ function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe }) {
 }
 
 // Main Component
-export default function HumanAvatar3D({ 
-  signSequence = '', 
-  isAnimating = false, 
-  useReadyPlayerMe = true 
+export default function HumanAvatar3D({
+  signSequence = '',
+  isAnimating = false,
+  useReadyPlayerMe = true
 }) {
   const [mounted, setMounted] = useState(false)
-  
+
   useEffect(() => {
     setMounted(true)
   }, [])
-  
+
   // Don't render on server
   if (!mounted) {
     return (
@@ -301,21 +301,21 @@ export default function HumanAvatar3D({
       </div>
     )
   }
-  
+
   return (
     <div className="relative w-full h-full bg-gradient-to-br from-gray-900 via-black to-gray-900 overflow-hidden">
       <Canvas
         shadows
-        camera={{ position: [0, 1.2, 1.8], fov: 35 }}
+        camera={{ position: [0, 1.45, 2.1], fov: 40 }}
         gl={{ antialias: true, alpha: true }}
       >
-        <AvatarScene 
+        <AvatarScene
           signSequence={signSequence}
           isAnimating={isAnimating}
           useReadyPlayerMe={useReadyPlayerMe}
         />
       </Canvas>
-      
+
       {/* Current Sign */}
       {signSequence && (
         <div className="absolute bottom-2 left-2 right-2">
