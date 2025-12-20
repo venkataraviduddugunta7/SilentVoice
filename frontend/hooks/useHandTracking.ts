@@ -19,30 +19,30 @@ export function useHandTracking(
   const [error, setError] = useState<string | null>(null)
   const [hands, setHands] = useState<Hands | null>(null)
   const [camera, setCamera] = useState<Camera | null>(null)
-  
+
   // Initialize MediaPipe Hands
   useEffect(() => {
     const initializeHands = async () => {
       try {
         // Dynamic import to avoid SSR issues
         const { Hands } = await import('@mediapipe/hands')
-        
+
         const handsInstance = new Hands({
           locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
           }
         })
-        
+
         handsInstance.setOptions({
           maxNumHands: 2,
           modelComplexity: 1,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
         })
-        
+
         handsInstance.onResults((results: Results) => {
           setLandmarks(results)
-          
+
           // Draw on canvas if available
           if (canvasRef.current && results.multiHandLandmarks) {
             const canvas = canvasRef.current
@@ -50,7 +50,7 @@ export function useHandTracking(
             if (ctx) {
               // Clear canvas
               ctx.clearRect(0, 0, canvas.width, canvas.height)
-              
+
               // Draw landmarks and connections
               results.multiHandLandmarks.forEach((landmarks) => {
                 drawConnectors(ctx, landmarks, HAND_CONNECTIONS)
@@ -59,34 +59,34 @@ export function useHandTracking(
             }
           }
         })
-        
+
         setHands(handsInstance)
       } catch (err) {
         console.error('Failed to initialize MediaPipe Hands:', err)
         setError('Failed to initialize hand tracking')
       }
     }
-    
+
     initializeHands()
-    
+
     return () => {
       if (hands) {
         hands.close()
       }
     }
   }, [canvasRef])
-  
+
   // Start tracking
   const startTracking = useCallback(async () => {
     if (!hands || !videoRef.current) {
       setError('Hand tracking not initialized or video not available')
       return
     }
-    
+
     try {
       // Dynamic import Camera utils
       const { Camera } = await import('@mediapipe/camera_utils')
-      
+
       const cameraInstance = new Camera(videoRef.current, {
         onFrame: async () => {
           if (hands && videoRef.current) {
@@ -96,7 +96,7 @@ export function useHandTracking(
         width: 1280,
         height: 720
       })
-      
+
       await cameraInstance.start()
       setCamera(cameraInstance)
       setIsTracking(true)
@@ -106,7 +106,7 @@ export function useHandTracking(
       setError('Failed to start camera')
     }
   }, [hands, videoRef])
-  
+
   // Stop tracking
   const stopTracking = useCallback(() => {
     if (camera) {
@@ -116,7 +116,7 @@ export function useHandTracking(
     setIsTracking(false)
     setLandmarks(null)
   }, [camera])
-  
+
   return {
     landmarks,
     isTracking,
@@ -144,11 +144,11 @@ function drawConnectors(
 ) {
   ctx.strokeStyle = '#00FF00'
   ctx.lineWidth = 2
-  
+
   connections.forEach(([start, end]) => {
     const startPoint = landmarks[start]
     const endPoint = landmarks[end]
-    
+
     ctx.beginPath()
     ctx.moveTo(startPoint.x * ctx.canvas.width, startPoint.y * ctx.canvas.height)
     ctx.lineTo(endPoint.x * ctx.canvas.width, endPoint.y * ctx.canvas.height)
@@ -159,7 +159,7 @@ function drawConnectors(
 // Helper function to draw landmarks
 function drawLandmarks(ctx: CanvasRenderingContext2D, landmarks: any[]) {
   ctx.fillStyle = '#FF0000'
-  
+
   landmarks.forEach((landmark) => {
     ctx.beginPath()
     ctx.arc(

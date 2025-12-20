@@ -5,6 +5,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Html } from '@react-three/drei'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // Your Ready Player Me Avatar URL
 const AVATAR_URL = 'https://models.readyplayer.me/694612141c1817592ce84efe.glb'
@@ -51,7 +52,7 @@ const SIGN_ANIMATIONS = {
 
 // Ready Player Me Avatar Component
 function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
-  const group = useRef()
+  const group = useRef<THREE.Group>(null)
   const { scene } = useGLTF(AVATAR_URL)
 
   // Clone the scene to avoid mutation issues
@@ -70,10 +71,39 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
   const animationTime = useRef(0)
   const [currentSign, setCurrentSign] = useState(null)
 
+  // New States for enhanced interaction
+  const [isWalking, setIsWalking] = useState(true)
+  const walkTime = useRef(0)
+
+  // Initial Entrance Animation - useLayoutEffect to prevent visual flash at wrong position
+  React.useLayoutEffect(() => {
+    // Start slightly back for a natural entry, but not too far (-1.5m)
+    if (group.current) {
+      group.current.position.z = -1.5
+      setIsWalking(true)
+    }
+  }, [])
+
+  // Setup Smile and find bones
   useEffect(() => {
     if (clonedScene) {
       // Find animation bones in the model (type-safe version)
-      clonedScene.traverse((child) => {
+      clonedScene.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh) {
+          // Facial Expressions (Morph Targets)
+          if (child.morphTargetDictionary && child.morphTargetInfluences) {
+            const smileIndex = child.morphTargetDictionary['mouthSmile'] || child.morphTargetDictionary['smile']
+            if (smileIndex !== undefined && child.morphTargetInfluences) {
+              child.morphTargetInfluences[smileIndex] = 0.7 // Gentle smile
+            }
+          }
+          // Ensure visibility from all angles
+          child.frustumCulled = false;
+          if (child.material) {
+            child.material.side = THREE.DoubleSide; // Handle one-sided materials
+          }
+        }
+
         if ('isBone' in child && child.isBone) {
           const name = child.name.toLowerCase()
           if (name.includes('rightarm') || name.includes('right_arm') || name.includes('r_upperarm')) {
@@ -108,7 +138,70 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
   }, [signSequence])
 
   useFrame((state, delta) => {
-    if (!isAnimating || !currentSign || !SIGN_ANIMATIONS[currentSign]) return
+    // 1. Entrance Walking Animation
+    if (isWalking && group.current) {
+      walkTime.current += delta
+
+      // Move forward
+      group.current.position.z = THREE.MathUtils.lerp(group.current.position.z, 0, delta * 2)
+
+      // Bobbing motion
+      group.current.position.y = -0.5 + Math.sin(walkTime.current * 10) * 0.05
+
+      // Slight rotation sway
+      group.current.rotation.y = Math.sin(walkTime.current * 5) * 0.05
+
+      // Arm swing while walking
+      if (bones.current.rightArm && bones.current.leftArm) {
+        bones.current.rightArm.rotation.x = Math.sin(walkTime.current * 10) * 0.3
+        bones.current.leftArm.rotation.x = -Math.sin(walkTime.current * 10) * 0.3
+        bones.current.rightArm.rotation.z = -0.2
+        bones.current.leftArm.rotation.z = 0.2
+      }
+
+      // Stop walking when close
+      if (Math.abs(group.current.position.z) < 0.1) {
+        setIsWalking(false)
+        group.current.position.z = 0
+        group.current.position.y = -0.5
+        group.current.rotation.y = 0
+      }
+      return
+    }
+
+    // 2. Idle Animation (Hands clasped, breathing)
+    if (!isAnimating && !currentSign) {
+      animationTime.current += delta
+
+      // Breathing (Spine/Chest)
+      if (bones.current.spine) {
+        bones.current.spine.rotation.x = Math.sin(animationTime.current * 2) * 0.02
+      }
+
+      // Hands Clasped Pose
+      // Right Arm
+      if (bones.current.rightArm) {
+        bones.current.rightArm.rotation.x = THREE.MathUtils.lerp(bones.current.rightArm.rotation.x, -0.5, 0.1)
+        bones.current.rightArm.rotation.y = THREE.MathUtils.lerp(bones.current.rightArm.rotation.y, -0.5, 0.1) // Bring inward
+        bones.current.rightArm.rotation.z = THREE.MathUtils.lerp(bones.current.rightArm.rotation.z, -0.2, 0.1)
+      }
+      // Left Arm
+      if (bones.current.leftArm) {
+        bones.current.leftArm.rotation.x = THREE.MathUtils.lerp(bones.current.leftArm.rotation.x, -0.5, 0.1)
+        bones.current.leftArm.rotation.y = THREE.MathUtils.lerp(bones.current.leftArm.rotation.y, 0.5, 0.1) // Bring inward
+        bones.current.leftArm.rotation.z = THREE.MathUtils.lerp(bones.current.leftArm.rotation.z, 0.2, 0.1)
+      }
+      // Hands
+      if (bones.current.rightHand) {
+        bones.current.rightHand.rotation.x = THREE.MathUtils.lerp(bones.current.rightHand.rotation.x, 0, 0.1)
+        const handX = Math.sin(animationTime.current) * 0.005
+        bones.current.rightHand.position.set(handX, 0, 0) // Micro movement
+      }
+      return
+    }
+
+    // 3. Sign Language Animation (Existing logic)
+    if (!currentSign || !SIGN_ANIMATIONS[currentSign]) return
 
     animationTime.current += delta
     const animation = SIGN_ANIMATIONS[currentSign]
@@ -232,12 +325,17 @@ function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe }) {
 
   return (
     <>
-      {/* Lighting optimized for sign language */}
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
+      {/* Studio lighting for 360 observability */}
+      <ambientLight intensity={0.6} />
+      {/* Front lights */}
+      <directionalLight position={[5, 5, 5]} intensity={1.2} castShadow />
       <directionalLight position={[-5, 5, 5]} intensity={0.8} />
-      <spotLight position={[0, 3, 3]} intensity={0.5} angle={0.6} penumbra={0.5} />
-      <pointLight position={[0, 0, 2]} intensity={0.3} />
+      {/* Back/Rim light for side and back visibility */}
+      <directionalLight position={[0, 5, -5]} intensity={1.0} />
+      <directionalLight position={[0, 0, -5]} intensity={0.5} />
+
+      <spotLight position={[0, 5, 5]} intensity={0.8} angle={0.6} penumbra={0.5} />
+      <pointLight position={[0, 2, 2]} intensity={0.4} />
 
       {/* Avatar Selection */}
       {useReadyPlayerMe && !avatarError ? (
@@ -285,29 +383,53 @@ export default function HumanAvatar3D({
   useReadyPlayerMe = true
 }) {
   const [mounted, setMounted] = useState(false)
+  // State for delayed subtitle clearing
+  const [displaySign, setDisplaySign] = useState('')
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  useEffect(() => {
+    if (signSequence) {
+      setDisplaySign(signSequence)
+      // Clear subtitle after 3 seconds of no updates
+      const timer = setTimeout(() => {
+        setDisplaySign('')
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [signSequence])
+
   // Don't render on server
   if (!mounted) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
+      <div className="w-full h-full flex items-center justify-center bg-[radial-gradient(circle_at_center,_#ffffff_0%,_#f3f4f6_100%)]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-sm text-gray-400">Initializing avatar...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-slate-800 mx-auto mb-4"></div>
+          <p className="text-sm text-slate-600">Initializing avatar...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="relative w-full h-full bg-gradient-to-br from-gray-900 via-black to-gray-900 overflow-hidden">
+    <div className="relative w-full h-full bg-gray-50 overflow-hidden">
+      {/* Premium Animated Background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-amber-200/40 rounded-full mix-blend-multiply filter blur-[80px] animate-float opacity-70"></div>
+        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-200/40 rounded-full mix-blend-multiply filter blur-[80px] animate-float animation-delay-2000 opacity-70"></div>
+        <div className="absolute top-[40%] left-[30%] w-[300px] h-[300px] bg-purple-100/40 rounded-full mix-blend-multiply filter blur-[60px] animate-pulse opacity-50"></div>
+
+        {/* Apple-style Grain/Noise Overlay for Texture */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+      </div>
+
       <Canvas
         shadows
         camera={{ position: [0, 1.45, 2.1], fov: 40 }}
         gl={{ antialias: true, alpha: true }}
+        className="relative z-10"
       >
         <AvatarScene
           signSequence={signSequence}
@@ -316,16 +438,23 @@ export default function HumanAvatar3D({
         />
       </Canvas>
 
-      {/* Current Sign */}
-      {signSequence && (
-        <div className="absolute bottom-2 left-2 right-2">
-          <div className="bg-black/40 backdrop-blur-sm rounded px-2 py-1">
-            <p className="text-[14px] text-white text-center">
-              {signSequence}
-            </p>
+      {/* Cinematic Subtitles - Apple TV Style */}
+      <AnimatePresence>
+        {displaySign && (
+          <div className="absolute bottom-12 left-0 right-0 flex justify-center z-20 px-1 pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 1, transition: { duration: 0.4 } }}
+              className="bg-black/40 backdrop-blur-md px-1 py-1 rounded-xl border border-white/5 shadow-2xl max-w-2xl"
+            >
+              <p className="text-lg font-light text-white tracking-wide text-center drop-shadow-sm leading-relaxed">
+                {displaySign}
+              </p>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   )
 }
