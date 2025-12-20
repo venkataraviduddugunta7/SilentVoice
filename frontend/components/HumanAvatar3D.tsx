@@ -316,20 +316,11 @@ export default function HumanAvatar3D({
         />
       </Canvas>
       
-      {/* Minimal Status */}
-      <div className="absolute top-2 right-2">
-        <div className="bg-black/40 backdrop-blur-sm rounded px-2 py-1">
-          <p className="text-[10px] text-gray-400">
-            {useReadyPlayerMe ? '🎭' : '📦'}
-          </p>
-        </div>
-      </div>
-      
       {/* Current Sign */}
       {signSequence && (
         <div className="absolute bottom-2 left-2 right-2">
           <div className="bg-black/40 backdrop-blur-sm rounded px-2 py-1">
-            <p className="text-[10px] text-gray-300 text-center">
+            <p className="text-[14px] text-white text-center">
               {signSequence}
             </p>
           </div>
