@@ -23,7 +23,7 @@ import {
 import dynamic from 'next/dynamic'
 
 // Dynamic import for 3D components
-const Avatar3D = dynamic(() => import('@/components/Avatar3D'), {
+const HumanAvatar3D = dynamic(() => import('@/components/HumanAvatar3D'), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div></div>
 })
@@ -450,9 +450,10 @@ export default function LearnPage() {
                 >
                   {/* 3D Avatar */}
                   <div className="aspect-video glass rounded-2xl overflow-hidden">
-                    <Avatar3D 
+                    <HumanAvatar3D 
                       signSequence={selectedSign.word}
                       isAnimating={true}
+                      useReadyPlayerMe={true}
                     />
                   </div>
                   

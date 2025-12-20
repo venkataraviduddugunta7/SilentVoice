@@ -32,7 +32,7 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useHandTracking } from '@/hooks/useHandTracking'
 
 // Dynamically import 3D avatar to avoid SSR issues
-const Avatar3D = dynamic(() => import('@/components/Avatar3D'), {
+const HumanAvatar3D = dynamic(() => import('@/components/HumanAvatar3D'), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div></div>
 })
@@ -430,10 +430,11 @@ export default function TranslatePage() {
                 <>
                   {/* 3D Avatar */}
                   <div className="aspect-video glass rounded-2xl overflow-hidden">
-                    <Avatar3D 
-                      signSequence={currentSign}
-                      isAnimating={isProcessing}
-                    />
+            <HumanAvatar3D 
+              signSequence={currentSign || transcript}
+              isAnimating={true}
+              useReadyPlayerMe={true}
+            />
                   </div>
                   
                   {/* Sign Description */}

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from websocket_manager import websocket_manager
+from websocket_manager import websocket_manager  # Keep for compatibility
+from websocket_handler import sign_handler  # Enhanced handler
 from services.inference import get_inference_service
 import json
 import logging
@@ -243,12 +244,12 @@ def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str,
 @router.websocket("/ws/sign")
 async def websocket_sign_endpoint(websocket: WebSocket):
     """
-    WebSocket endpoint for real-time sign language data processing
-    Accepts hand coordinate data and processes it for translation
+    Enhanced WebSocket endpoint with ML model integration
+    Accepts hand landmark data for real-time sign language translation
     """
     
-    # Accept the connection
-    await websocket_manager.connect(websocket)
+    # Use enhanced handler with ML support
+    await sign_handler.connect(websocket)
     
     try:
         while True:
@@ -256,11 +257,11 @@ async def websocket_sign_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             
             try:
-                # Parse JSON data
+                # Parse the JSON data
                 json_data = json.loads(data)
                 
-                # Handle different message types
-                if json_data.get("type") == "pose":
+                # Check data type
+                if json_data.get("type") == "landmarks":
                     # New SilentVoice format
                     pose_data = json_data.get("data", [])
                     

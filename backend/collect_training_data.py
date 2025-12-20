@@ -1,215 +1,240 @@
+#!/usr/bin/env python3
 """
-Data Collection Script for Sign Language Training
-Captures hand landmarks from webcam and saves them as training sequences.
+Interactive training data collection for sign language
+This script helps you collect hand landmark data for training the model
 """
 
 import cv2
 import mediapipe as mp
-import json
+import numpy as np
 import os
-import time
+import json
+from pathlib import Path
 from datetime import datetime
-from typing import List, Dict
-import argparse
+import time
+from database import SessionLocal, save_training_sample, initialize_signs
+
+# Initialize MediaPipe
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+
+# Signs to collect
+SIGNS_TO_COLLECT = [
+    'hello', 'thank_you', 'please', 'yes', 'no',
+    'help', 'sorry', 'goodbye', 'love', 'friend',
+    'eat', 'drink', 'sleep', 'work', 'home'
+]
+
+# Configuration
+SAMPLES_PER_SIGN = 30  # Number of samples to collect per sign
+FRAMES_PER_SAMPLE = 30  # Number of frames per sample
+DATA_PATH = Path('training_data')
+
 
 class TrainingDataCollector:
-    """Collect hand landmark sequences for training."""
-    
-    def __init__(self, output_dir: str = 'training_data'):
-        self.output_dir = output_dir
-        self.mp_hands = mp.solutions.hands
-        self.hands = self.mp_hands.Hands(
+    def __init__(self):
+        self.hands = mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=2,
-            min_detection_confidence=0.7,
+            min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.cap = None
-        self.current_gesture = None
-        self.sequence = []
-        self.frame_count = 0
-        self.sequence_length = 30  # Frames per sequence
-        
-    def start_camera(self):
-        """Initialize camera."""
         self.cap = cv2.VideoCapture(0)
-        if not self.cap.isOpened():
-            raise RuntimeError("Cannot open camera")
-        
-        # Set camera properties
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        print("✅ Camera initialized")
+        self.db = SessionLocal()
+        
+        # Create data directory
+        DATA_PATH.mkdir(exist_ok=True)
+        
+    def extract_landmarks(self, results):
+        """Extract hand landmarks from MediaPipe results"""
+        if not results.multi_hand_landmarks:
+            return None
+            
+        landmarks = []
+        for hand_landmarks in results.multi_hand_landmarks:
+            for lm in hand_landmarks.landmark:
+                landmarks.extend([lm.x, lm.y, lm.z])
+                
+        # Pad with zeros if only one hand detected (we expect 2 hands max)
+        while len(landmarks) < 21 * 3 * 2:  # 21 landmarks * 3 coords * 2 hands
+            landmarks.append(0.0)
+            
+        return landmarks[:21 * 3 * 2]  # Ensure consistent size
     
-    def stop_camera(self):
-        """Release camera."""
-        if self.cap:
-            self.cap.release()
-        cv2.destroyAllWindows()
-        print("✅ Camera released")
-    
-    def process_frame(self, frame) -> List[List[Dict]]:
-        """Process a frame and extract hand landmarks."""
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(rgb_frame)
+    def collect_samples(self, sign_name, num_samples=SAMPLES_PER_SIGN):
+        """Collect training samples for a specific sign"""
+        print(f"\n{'='*50}")
+        print(f"Collecting data for sign: {sign_name.upper()}")
+        print(f"{'='*50}")
+        print(f"Please perform the sign for '{sign_name}'")
+        print("Press SPACE to start recording each sample")
+        print("Press Q to skip this sign\n")
         
-        hands_data = []
+        sign_path = DATA_PATH / sign_name
+        sign_path.mkdir(exist_ok=True)
         
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                landmarks = []
-                for landmark in hand_landmarks.landmark:
-                    landmarks.append({
-                        'x': landmark.x,
-                        'y': landmark.y,
-                        'z': landmark.z
-                    })
-                hands_data.append(landmarks)
+        samples_collected = 0
         
-        return hands_data
-    
-    def save_sequence(self, gesture_name: str, sequence: List[List[List[Dict]]]):
-        """Save a collected sequence to JSON file."""
-        gesture_dir = os.path.join(self.output_dir, gesture_name)
-        os.makedirs(gesture_dir, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"sequence_{timestamp}_{len(sequence)}frames.json"
-        filepath = os.path.join(gesture_dir, filename)
-        
-        with open(filepath, 'w') as f:
-            json.dump(sequence, f, indent=2)
-        
-        print(f"✅ Saved sequence: {filepath}")
-        return filepath
-    
-    def collect_sequence(self, gesture_name: str):
-        """Collect a sequence of frames for a gesture."""
-        print(f"\n📹 Collecting sequence for: {gesture_name}")
-        print("Press SPACE to start recording, SPACE again to stop")
-        print("Press 'q' to cancel")
-        
-        sequence = []
-        recording = False
-        frame_count = 0
-        
-        while True:
+        while samples_collected < num_samples:
             ret, frame = self.cap.read()
             if not ret:
-                break
-            
+                continue
+                
             # Flip frame horizontally for mirror effect
             frame = cv2.flip(frame, 1)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
-            # Process frame
-            hands_data = self.process_frame(frame)
+            # Process with MediaPipe
+            results = self.hands.process(frame_rgb)
             
-            # Draw landmarks
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = self.hands.process(rgb_frame)
-            
+            # Draw hand landmarks
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
-                    self.mp_drawing.draw_landmarks(
-                        frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS
+                    mp_drawing.draw_landmarks(
+                        frame,
+                        hand_landmarks,
+                        mp_hands.HAND_CONNECTIONS,
+                        mp_drawing_styles.get_default_hand_landmarks_style(),
+                        mp_drawing_styles.get_default_hand_connections_style()
                     )
             
-            # Display status
-            status_text = f"Gesture: {gesture_name}"
-            if recording:
-                status_text += f" | Recording... ({len(sequence)}/{self.sequence_length} frames)"
-                cv2.putText(frame, status_text, (10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                
-                # Add to sequence
-                sequence.append(hands_data)
-                frame_count += 1
-                
-                if frame_count >= self.sequence_length:
-                    recording = False
-                    break
-            else:
-                status_text += " | Press SPACE to start"
-                cv2.putText(frame, status_text, (10, 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            # Display instructions
+            cv2.putText(frame, f"Sign: {sign_name.upper()}", (10, 30),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, f"Samples: {samples_collected}/{num_samples}", (10, 70),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, "Press SPACE to record, Q to skip", (10, 110),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1)
             
-            cv2.imshow('Training Data Collection', frame)
+            cv2.imshow('Collect Training Data', frame)
             
             key = cv2.waitKey(1) & 0xFF
-            if key == ord(' '):  # Space to start/stop
-                if not recording:
-                    recording = True
-                    sequence = []
-                    frame_count = 0
-                    print("🔴 Recording started...")
+            
+            if key == ord(' '):  # Space bar to start recording
+                # Record a sequence of frames
+                print(f"Recording sample {samples_collected + 1}...")
+                sequence = []
+                
+                for frame_num in range(FRAMES_PER_SAMPLE):
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        continue
+                        
+                    frame = cv2.flip(frame, 1)
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    results = self.hands.process(frame_rgb)
+                    
+                    landmarks = self.extract_landmarks(results)
+                    if landmarks:
+                        sequence.append(landmarks)
+                    
+                    # Visual feedback during recording
+                    if results.multi_hand_landmarks:
+                        for hand_landmarks in results.multi_hand_landmarks:
+                            mp_drawing.draw_landmarks(
+                                frame,
+                                hand_landmarks,
+                                mp_hands.HAND_CONNECTIONS,
+                                mp_drawing_styles.get_default_hand_landmarks_style(),
+                                mp_drawing_styles.get_default_hand_connections_style()
+                            )
+                    
+                    # Show recording indicator
+                    cv2.putText(frame, "RECORDING", (10, 30),
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(frame, f"Frame: {frame_num + 1}/{FRAMES_PER_SAMPLE}", (10, 70),
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    
+                    cv2.imshow('Collect Training Data', frame)
+                    cv2.waitKey(1)
+                
+                # Save the sequence
+                if len(sequence) == FRAMES_PER_SAMPLE:
+                    # Save to file
+                    sample_path = sign_path / f"sample_{samples_collected}.json"
+                    with open(sample_path, 'w') as f:
+                        json.dump(sequence, f)
+                    
+                    # Save to database
+                    save_training_sample(self.db, sign_name, sequence, user_id="collector")
+                    
+                    samples_collected += 1
+                    print(f"Sample {samples_collected} saved!")
                 else:
-                    recording = False
-                    break
-            elif key == ord('q'):  # Quit
-                return None
+                    print("Failed to capture enough frames, try again")
+                    
+                # Short pause between samples
+                time.sleep(1)
+                
+            elif key == ord('q'):  # Skip this sign
+                print(f"Skipping {sign_name}")
+                break
+                
+        print(f"Completed collecting {samples_collected} samples for {sign_name}")
         
-        if len(sequence) > 0:
-            filepath = self.save_sequence(gesture_name, sequence)
-            return filepath
-        return None
-    
-    def run_interactive_collection(self, gestures: List[str]):
-        """Run interactive data collection session."""
-        print("=" * 60)
-        print("Sign Language Training Data Collection")
-        print("=" * 60)
-        print("\nInstructions:")
-        print("1. Select a gesture to record")
-        print("2. Press SPACE to start/stop recording")
-        print("3. Perform the gesture while recording")
-        print("4. Press 'q' to quit")
-        print("=" * 60)
+    def collect_all_signs(self):
+        """Collect training data for all signs"""
+        print("\n" + "="*60)
+        print("SIGN LANGUAGE TRAINING DATA COLLECTION")
+        print("="*60)
+        print(f"Signs to collect: {', '.join(SIGNS_TO_COLLECT)}")
+        print(f"Samples per sign: {SAMPLES_PER_SIGN}")
+        print(f"Frames per sample: {FRAMES_PER_SAMPLE}")
+        print("="*60 + "\n")
         
-        self.start_camera()
+        for sign in SIGNS_TO_COLLECT:
+            self.collect_samples(sign)
+            
+            # Ask if user wants to continue
+            print("\nPress ENTER to continue to next sign, or Q to quit...")
+            if input().lower() == 'q':
+                break
         
-        try:
-            while True:
-                print("\nAvailable gestures:")
-                for i, gesture in enumerate(gestures, 1):
-                    print(f"  {i}. {gesture}")
-                print(f"  {len(gestures) + 1}. Quit")
-                
-                choice = input("\nSelect gesture (number): ").strip()
-                
-                if choice == str(len(gestures) + 1) or choice.lower() == 'q':
-                    break
-                
-                try:
-                    gesture_idx = int(choice) - 1
-                    if 0 <= gesture_idx < len(gestures):
-                        gesture_name = gestures[gesture_idx]
-                        self.collect_sequence(gesture_name)
-                    else:
-                        print("❌ Invalid choice")
-                except ValueError:
-                    print("❌ Invalid input")
-                
-        except KeyboardInterrupt:
-            print("\n\n⚠️ Interrupted by user")
-        finally:
-            self.stop_camera()
-            print("\n✅ Data collection session ended")
+        print("\n" + "="*60)
+        print("DATA COLLECTION COMPLETE!")
+        print(f"Data saved to: {DATA_PATH}")
+        print("="*60)
+        
+    def cleanup(self):
+        """Clean up resources"""
+        self.cap.release()
+        cv2.destroyAllWindows()
+        self.db.close()
+        
 
 def main():
-    """Main function."""
-    parser = argparse.ArgumentParser(description='Collect training data for sign language recognition')
-    parser.add_argument('--output-dir', type=str, default='training_data',
-                        help='Output directory for training data')
-    parser.add_argument('--gestures', type=str, nargs='+',
-                        default=['HELLO', 'THANK_YOU', 'YES', 'NO', 'PLEASE', 'SORRY', 'GOOD', 'BAD', 'LOVE', 'PEACE'],
-                        help='List of gestures to collect')
+    """Main entry point"""
+    collector = TrainingDataCollector()
     
-    args = parser.parse_args()
-    
-    collector = TrainingDataCollector(output_dir=args.output_dir)
-    collector.run_interactive_collection(args.gestures)
+    try:
+        # Initialize database with basic signs
+        initialize_signs(collector.db)
+        
+        print("Welcome to Sign Language Training Data Collector!")
+        print("\nOptions:")
+        print("1. Collect all signs")
+        print("2. Collect specific sign")
+        print("3. Exit")
+        
+        choice = input("\nEnter your choice (1-3): ")
+        
+        if choice == '1':
+            collector.collect_all_signs()
+        elif choice == '2':
+            sign_name = input("Enter sign name: ").lower()
+            num_samples = int(input(f"Number of samples (default {SAMPLES_PER_SIGN}): ") or SAMPLES_PER_SIGN)
+            collector.collect_samples(sign_name, num_samples)
+        else:
+            print("Exiting...")
+            
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+    finally:
+        collector.cleanup()
+        
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
