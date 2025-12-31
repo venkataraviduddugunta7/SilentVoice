@@ -7,7 +7,16 @@ import os
 import json
 import numpy as np
 import tensorflow as tf
-from model import SignLanguageModel, DEFAULT_CLASS_NAMES
+from model.lstm_model import SignLanguageModel
+from typing import Tuple, List
+
+# Default class names for training
+DEFAULT_CLASS_NAMES = [
+    "HELLO", "THANK_YOU", "YES", "NO", "PLEASE", 
+    "SORRY", "HELP", "LOVE", "GOOD", "BAD",
+    "STOP", "GO", "WATER", "FOOD", "BATHROOM",
+    "HAPPY", "SAD", "ANGRY", "SCARED", "TIRED"
+]
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import logging

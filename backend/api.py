@@ -1,11 +1,16 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import JSONResponse
 from websocket_manager import websocket_manager  # Keep for compatibility
 from websocket_handler import sign_handler  # Enhanced handler
 from services.inference import get_inference_service
+from services.asl_dictionary import get_asl_recognizer
+from services.text2sign import text_to_signs
 import json
 import logging
-import random
-from typing import Dict, Any, List, Tuple
+import os
+import numpy as np
+from typing import Dict, Any, List, Tuple, Optional
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 # Create API router
 router = APIRouter()
+
+# Training data storage
+TRAINING_DATA_DIR = "training_data"
+os.makedirs(TRAINING_DATA_DIR, exist_ok=True)
 
 def analyze_hand_gesture(landmarks: List[Dict[str, float]]) -> Dict[str, Any]:
     """
@@ -75,51 +84,50 @@ def analyze_hand_gesture(landmarks: List[Dict[str, float]]) -> Dict[str, Any]:
     ring_extended = ring_tip['y'] < ring_pip['y'] - 0.02
     pinky_extended = pinky_tip['y'] < pinky_pip['y'] - 0.02
     
-    # Additional gesture features
-    # Distance calculations for gesture recognition
-    thumb_index_dist = ((thumb_tip['x'] - index_tip['x'])**2 + (thumb_tip['y'] - index_tip['y'])**2)**0.5
+    # Count extended fingers
+    fingers_up = sum([index_extended, middle_extended, ring_extended, pinky_extended])
     
-    # Hand orientation and position
-    hand_height = wrist['y']
-    hand_center_x = wrist['x']
+    # Calculate hand center
+    hand_center_x = sum(l['x'] for l in landmarks) / len(landmarks)
+    hand_center_y = sum(l['y'] for l in landmarks) / len(landmarks)
     
-    # Gesture-specific calculations
-    # Open palm detection
-    all_fingers_up = index_extended and middle_extended and ring_extended and pinky_extended
+    # Hand height (0 = top, 1 = bottom)
+    hand_height = hand_center_y
     
-    # Pointing detection
-    only_index_up = index_extended and not middle_extended and not ring_extended and not pinky_extended
+    # Hand openness (distance between fingertips and palm)
+    palm_center = landmarks[MIDDLE_MCP]
+    openness = sum([
+        ((index_tip['x'] - palm_center['x'])**2 + (index_tip['y'] - palm_center['y'])**2)**0.5,
+        ((middle_tip['x'] - palm_center['x'])**2 + (middle_tip['y'] - palm_center['y'])**2)**0.5,
+        ((ring_tip['x'] - palm_center['x'])**2 + (ring_tip['y'] - palm_center['y'])**2)**0.5,
+        ((pinky_tip['x'] - palm_center['x'])**2 + (pinky_tip['y'] - palm_center['y'])**2)**0.5
+    ]) / 4
     
-    # Peace sign detection
-    peace_sign = index_extended and middle_extended and not ring_extended and not pinky_extended
-    
-    # Fist detection
-    all_fingers_down = not index_extended and not middle_extended and not ring_extended and not pinky_extended
-    
-    # Wave detection (hand movement would need temporal analysis)
-    wave_position = hand_height < 0.4 and hand_center_x > 0.3 and hand_center_x < 0.7
+    # Detect specific hand shapes
+    is_fist = fingers_up == 0 and not thumb_up
+    is_open = fingers_up == 4 and openness > 0.15
+    is_pointing = index_extended and fingers_up == 1
+    is_peace = index_extended and middle_extended and fingers_up == 2
+    is_ok = thumb_up and index_extended and middle_extended and fingers_up == 3
     
     return {
         "valid": True,
+        "fingers_up": fingers_up,
         "thumb_up": thumb_up,
         "thumb_down": thumb_down,
-        "index_extended": index_extended,
-        "middle_extended": middle_extended,
-        "ring_extended": ring_extended,
-        "pinky_extended": pinky_extended,
-        "all_fingers_up": all_fingers_up,
-        "only_index_up": only_index_up,
-        "peace_sign": peace_sign,
-        "all_fingers_down": all_fingers_down,
-        "thumb_index_close": thumb_index_dist < 0.08,
-        "hand_height": hand_height,
-        "hand_center_x": hand_center_x,
-        "wave_position": wave_position,
-        # Legacy compatibility
         "index_up": index_extended,
         "middle_up": middle_extended,
         "ring_up": ring_extended,
-        "pinky_up": pinky_extended
+        "pinky_up": pinky_extended,
+        "is_fist": is_fist,
+        "is_open": is_open,
+        "is_pointing": is_pointing,
+        "is_peace": is_peace,
+        "is_ok": is_ok,
+        "hand_height": hand_height,
+        "hand_center_x": hand_center_x,
+        "hand_center_y": hand_center_y,
+        "openness": openness
     }
 
 def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str, float]:
@@ -152,52 +160,51 @@ def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str,
     
     # Enhanced gesture recognition for basic signs
     if num_hands == 1:
+        # Single hand gestures
         hand = hand_features[0]
         
-        # HELLO - Open palm or wave position
-        if hand["all_fingers_up"] and hand["wave_position"]:
-            return "HELLO", 0.95
-        elif hand["all_fingers_up"] and hand["hand_height"] < 0.4:
-            return "HELLO", 0.90
+        # Wave detection (HELLO) - open hand at shoulder height
+        if hand["is_open"] and hand["hand_height"] < 0.5:
+            return "HELLO", 0.92
         
-        # YES - Clear thumbs up
-        elif hand["thumb_up"] and hand["all_fingers_down"]:
-            return "YES", 0.98
-        elif hand["thumb_up"] and not hand["index_extended"]:
-            return "YES", 0.92
+        # Thumbs up (GOOD/YES)
+        elif hand["thumb_up"] and hand["fingers_up"] == 0:
+            return "GOOD", 0.95
         
-        # NO - Thumbs down or closed fist
-        elif hand["thumb_down"]:
-            return "NO", 0.95
-        elif hand["all_fingers_down"] and not hand["thumb_up"]:
-            return "NO", 0.85
+        # Pointing (YOU/THERE)
+        elif hand["is_pointing"]:
+            return "YOU", 0.88
         
-        # PEACE - V sign with index and middle fingers
-        elif hand["peace_sign"]:
-            return "PEACE", 0.96
+        # Peace sign
+        elif hand["is_peace"]:
+            return "PEACE", 0.90
         
-        # GOOD - OK sign or pointing up
-        elif hand["thumb_index_close"] and hand["middle_extended"]:
-            return "GOOD", 0.93
-        elif hand["only_index_up"] and hand["hand_height"] > 0.4:
-            return "GOOD", 0.88
+        # OK sign
+        elif hand["is_ok"]:
+            return "OK", 0.87
         
-        # PLEASE - Open palm at medium height
-        elif hand["all_fingers_up"] and hand["hand_height"] > 0.4:
-            return "PLEASE", 0.87
-        
-        # Basic pointing or greeting
-        elif hand["only_index_up"]:
+        # Fist (NO/STOP)
+        elif hand["is_fist"]:
             if hand["hand_height"] < 0.4:
-                return "HELLO", 0.82
+                return "STOP", 0.85
             else:
-                return "GOOD", 0.80
+                return "NO", 0.80
         
-        # Any raised hand as potential greeting
-        elif hand["hand_height"] < 0.35:
-            return "HELLO", 0.70
+        # Open hand low (HELP)
+        elif hand["is_open"] and hand["hand_height"] > 0.6:
+            return "HELP", 0.75
         
-        # Default for any gesture
+        # Number gestures
+        elif hand["fingers_up"] == 1:
+            return "ONE", 0.93
+        elif hand["fingers_up"] == 2:
+            return "TWO", 0.93
+        elif hand["fingers_up"] == 3:
+            return "THREE", 0.93
+        elif hand["fingers_up"] == 4:
+            return "FOUR", 0.93
+        elif hand["fingers_up"] == 5 or (hand["fingers_up"] == 4 and hand["thumb_up"]):
+            return "FIVE", 0.93
         else:
             return "HELLO", 0.55
             
@@ -236,10 +243,119 @@ def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str,
             return "GOOD", 0.83
         
         else:
-            return "THANK_YOU", 0.70
+            return "THANK_YOU", 0.60
     
     # Default case
     return "Unknown", 0.45
+
+@router.post("/training/upload")
+async def upload_training_data(data: Dict[str, Any]):
+    """
+    Upload training data for a gesture
+    
+    Expected format:
+    {
+        "gesture": "HELLO",
+        "frames": [...],  # List of tracking data frames
+        "duration": 3.5,
+        "timestamp": 1234567890
+    }
+    """
+    try:
+        gesture = data.get("gesture")
+        frames = data.get("frames")
+        duration = data.get("duration")
+        timestamp = data.get("timestamp", datetime.now().timestamp())
+        
+        if not gesture or not frames:
+            raise HTTPException(status_code=400, detail="Missing gesture or frames data")
+        
+        # Create gesture directory
+        gesture_dir = os.path.join(TRAINING_DATA_DIR, gesture)
+        os.makedirs(gesture_dir, exist_ok=True)
+        
+        # Save training data
+        filename = f"{gesture}_{int(timestamp)}.json"
+        filepath = os.path.join(gesture_dir, filename)
+        
+        with open(filepath, 'w') as f:
+            json.dump({
+                "gesture": gesture,
+                "frames": frames,
+                "duration": duration,
+                "timestamp": timestamp
+            }, f)
+        
+        logger.info(f"Saved training data for {gesture}: {filename}")
+        
+        return JSONResponse({
+            "status": "success",
+            "message": f"Training data saved for {gesture}",
+            "filename": filename
+        })
+        
+    except Exception as e:
+        logger.error(f"Error uploading training data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/training/stats")
+async def get_training_stats():
+    """
+    Get statistics about collected training data
+    """
+    try:
+        stats = {}
+        total_samples = 0
+        
+        if os.path.exists(TRAINING_DATA_DIR):
+            for gesture_name in os.listdir(TRAINING_DATA_DIR):
+                gesture_path = os.path.join(TRAINING_DATA_DIR, gesture_name)
+                if os.path.isdir(gesture_path):
+                    samples = len([f for f in os.listdir(gesture_path) if f.endswith('.json')])
+                    stats[gesture_name] = samples
+                    total_samples += samples
+        
+        return JSONResponse({
+            "status": "success",
+            "total_samples": total_samples,
+            "gestures": stats,
+            "data_directory": TRAINING_DATA_DIR
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting training stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/train/model")
+async def trigger_model_training():
+    """
+    Trigger model training with collected data
+    """
+    try:
+        # Import training module
+        from train_model import train_sign_language_model
+        
+        # Run training in background (in production, use Celery or similar)
+        import threading
+        training_thread = threading.Thread(
+            target=train_sign_language_model,
+            kwargs={
+                "data_dir": TRAINING_DATA_DIR,
+                "model_save_path": "models/sign_language_model.h5",
+                "epochs": 50,
+                "batch_size": 32
+            }
+        )
+        training_thread.start()
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Model training started in background"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error starting model training: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.websocket("/ws/sign")
 async def websocket_sign_endpoint(websocket: WebSocket):
@@ -261,9 +377,26 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                 json_data = json.loads(data)
                 
                 # Check data type
-                if json_data.get("type") == "landmarks":
-                    # New SilentVoice format
-                    pose_data = json_data.get("data", [])
+                if json_data.get("type") == "landmarks" or json_data.get("type") == "holistic":
+                    # Handle both simple landmarks and holistic data
+                    if json_data.get("type") == "holistic":
+                        # Extract hand landmarks from holistic data
+                        holistic_data = json_data.get("data", {})
+                        pose_data = []
+                        
+                        if holistic_data.get("leftHandLandmarks"):
+                            pose_data.append(holistic_data["leftHandLandmarks"])
+                        if holistic_data.get("rightHandLandmarks"):
+                            pose_data.append(holistic_data["rightHandLandmarks"])
+                            
+                        # Also extract pose and face for advanced recognition
+                        pose_landmarks = holistic_data.get("poseLandmarks")
+                        face_landmarks = holistic_data.get("faceLandmarks")
+                    else:
+                        # Simple landmarks format
+                        pose_data = json_data.get("data", [])
+                        pose_landmarks = None
+                        face_landmarks = None
                     
                     if not pose_data or len(pose_data) == 0:
                         logger.warning("Received empty pose data")
@@ -271,30 +404,82 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                     
                     logger.info(f"Received pose data: {len(pose_data)} hands")
                     
-                    # Try to use ML model, fallback to rule-based
-                    inference_service = get_inference_service()
-                    if inference_service.is_loaded:
-                        try:
-                            predicted_word, confidence = inference_service.predict(pose_data)
-                            logger.info(f"ML Model prediction: {predicted_word} ({confidence:.2f})")
-                        except Exception as e:
-                            logger.warning(f"ML model prediction failed: {e}. Using fallback.")
-                            predicted_word, confidence = process_sign_language(pose_data)
-                    else:
-                        # Use rule-based fallback
-                        predicted_word, confidence = process_sign_language(pose_data)
+                    # Try ASL dictionary recognition first
+                    asl_recognizer = get_asl_recognizer()
                     
-                    # Send prediction with lower threshold for basic gestures
-                    if confidence > 0.4 and predicted_word != "Unknown":
-                        response = {
-                            "type": "prediction",
-                            "word": predicted_word,
-                            "confidence": confidence
-                        }
-                        await websocket_manager.send_json(websocket, response)
-                        logger.info(f"✅ Sent prediction: {predicted_word} ({confidence:.2f})")
+                    # Store in gesture history for dynamic recognition
+                    if not hasattr(websocket, 'gesture_history'):
+                        websocket.gesture_history = []
+                    
+                    websocket.gesture_history.append(pose_data)
+                    if len(websocket.gesture_history) > 30:  # Keep last 30 frames
+                        websocket.gesture_history.pop(0)
+                    
+                    # Try dynamic recognition if we have enough frames
+                    if len(websocket.gesture_history) >= 5:
+                        predicted_word, confidence = asl_recognizer.recognize_dynamic_sign(
+                            websocket.gesture_history,
+                            pose_sequence=[pose_landmarks] if pose_landmarks else None,
+                            face_sequence=[face_landmarks] if face_landmarks else None
+                        )
                     else:
-                        logger.debug(f"Low confidence prediction ignored: {predicted_word} ({confidence:.2f})")
+                        # Try static recognition
+                        if pose_data and len(pose_data) > 0:
+                            predicted_word, confidence = asl_recognizer.recognize_static_sign(
+                                pose_data[0] if pose_data else [],
+                                pose_landmarks,
+                                face_landmarks
+                            )
+                        else:
+                            predicted_word, confidence = "UNKNOWN", 0.0
+                    
+                    # If ASL recognition fails, try ML model
+                    if confidence < 0.5:
+                        inference_service = get_inference_service()
+                        if inference_service.is_loaded:
+                            try:
+                                ml_word, ml_confidence = inference_service.predict(pose_data)
+                                if ml_confidence > confidence:
+                                    predicted_word, confidence = ml_word, ml_confidence
+                                    logger.info(f"ML Model prediction: {predicted_word} ({confidence:.2f})")
+                            except Exception as e:
+                                logger.warning(f"ML model prediction failed: {e}")
+                    
+                    # Final fallback to rule-based
+                    if confidence < 0.3:
+                        rule_word, rule_confidence = process_sign_language(pose_data)
+                        if rule_confidence > confidence:
+                            predicted_word, confidence = rule_word, rule_confidence
+                    
+                    # Send prediction back to client
+                    await websocket.send_text(json.dumps({
+                        "type": "prediction",
+                        "sign": predicted_word,
+                        "confidence": confidence,
+                        "timestamp": datetime.now().isoformat()
+                    }))
+                    
+                elif json_data.get("type") == "speech":
+                    # Handle speech to sign conversion
+                    text = json_data.get("text", "")
+                    
+                    if text:
+                        # Convert text to sign sequence
+                        signs = text_to_signs(text)
+                        
+                        if signs:
+                            await websocket.send_text(json.dumps({
+                                "type": "signs",
+                                "signs": signs,
+                                "original_text": text,
+                                "timestamp": datetime.now().isoformat()
+                            }))
+                        else:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": "No signs found for text",
+                                "text": text
+                            }))
                     
                 elif "landmarks" in json_data:
                     # Legacy format support
@@ -340,29 +525,27 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                 await websocket_manager.send_json(websocket, error_response)
                 
     except WebSocketDisconnect:
-        logger.info("Client disconnected from sign language endpoint")
-        websocket_manager.disconnect(websocket)
+        logger.info("WebSocket disconnected")
+        await sign_handler.disconnect(websocket)
     except Exception as e:
-        logger.error(f"Unexpected error in WebSocket endpoint: {e}")
-        websocket_manager.disconnect(websocket)
+        logger.error(f"WebSocket error: {e}")
+        await sign_handler.disconnect(websocket)
 
+# Health check endpoint
 @router.get("/health")
 async def health_check():
-    """
-    Health check endpoint
-    """
+    """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "SilentVoice Backend",
-        "active_connections": websocket_manager.get_connection_count()
+        "timestamp": datetime.now().isoformat()
     }
 
+# Get active connections
 @router.get("/connections")
 async def get_connections():
-    """
-    Get information about active WebSocket connections
-    """
+    """Get active WebSocket connections"""
     return {
-        "active_connections": websocket_manager.get_connection_count(),
+        "active_connections": len(sign_handler.active_connections),
         "status": "ok"
     }

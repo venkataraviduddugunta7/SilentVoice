@@ -413,6 +413,8 @@ export default function HumanAvatar3D({
     )
   }
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
   return (
     <div className="relative w-full h-full bg-gray-50 overflow-hidden">
       {/* Premium Animated Background */}
@@ -427,7 +429,10 @@ export default function HumanAvatar3D({
 
       <Canvas
         shadows
-        camera={{ position: [0, 1.45, 2.1], fov: 40 }}
+        camera={{
+          position: [0, 1.45, isMobile ? 3.5 : 2.1],
+          fov: isMobile ? 45 : 40
+        }}
         gl={{ antialias: true, alpha: true }}
         className="relative z-10"
       >
@@ -441,14 +446,14 @@ export default function HumanAvatar3D({
       {/* Cinematic Subtitles - Apple TV Style */}
       <AnimatePresence>
         {displaySign && (
-          <div className="absolute bottom-12 left-0 right-0 flex justify-center z-20 px-1 pointer-events-none">
+          <div className="absolute md:bottom-12 bottom-6 left-0 right-0 flex justify-center z-20 px-2 pointer-events-none">
             <motion.div
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 1, transition: { duration: 0.4 } }}
-              className="bg-black/40 backdrop-blur-md px-1 py-1 rounded-xl border border-white/5 shadow-2xl max-w-2xl"
+              className="bg-black/40 backdrop-blur-md md:px-4 px-2 md:py-2 py-2 rounded-xl border border-white/5 shadow-2xl max-w-2xl"
             >
-              <p className="text-lg font-light text-white tracking-wide text-center drop-shadow-sm leading-relaxed">
+              <p className="md:text-lg text-base font-light text-white tracking-wide text-center drop-shadow-sm leading-relaxed">
                 {displaySign}
               </p>
             </motion.div>

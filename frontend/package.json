@@ -10,15 +10,20 @@
   },
   "dependencies": {
     "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/drawing_utils": "^0.3.1675466124",
     "@mediapipe/hands": "^0.4.1675469240",
+    "@mediapipe/holistic": "^0.5.1675471629",
     "@react-three/drei": "^9.88.17",
     "@react-three/fiber": "^8.15.12",
+    "@tensorflow/tfjs": "^4.15.0",
+    "@tensorflow-models/handpose": "^0.0.7",
     "framer-motion": "^10.16.5",
     "framer-motion-3d": "^10.16.5",
     "lucide-react": "^0.294.0",
     "next": "14.0.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-webcam": "^7.2.0",
     "three": "^0.159.0"
   },
   "devDependencies": {
