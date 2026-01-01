@@ -48,6 +48,15 @@ export default function TranslatePage() {
   const [translatedText, setTranslatedText] = useState('')
   const [fingerSpelling, setFingerSpelling] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [lastSpokenSign, setLastSpokenSign] = useState('')
+  const [lastSignTime, setLastSignTime] = useState(0)
+  const [signBuffer, setSignBuffer] = useState<{sign: string, count: number}>({sign: '', count: 0})
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.75)
+  const [showSettings, setShowSettings] = useState(false)
+  const [sentenceMode, setSentenceMode] = useState(true)
+  const [currentSentence, setCurrentSentence] = useState<string[]>([])
+  const [sentenceTimer, setSentenceTimer] = useState<NodeJS.Timeout | null>(null)
+  const [gestureMetadata, setGestureMetadata] = useState<any>(null)
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -76,32 +85,106 @@ export default function TranslatePage() {
     error: trackingError
   } = useMediaPipeHolistic(videoRef, canvasRef)
 
-  // Process incoming WebSocket messages
+  // Process incoming WebSocket messages with improved filtering
   useEffect(() => {
     if (lastMessage) {
       try {
         const data = JSON.parse(lastMessage)
 
         if (data.type === 'prediction') {
-          setCurrentSign(data.sign)
+          const currentTime = Date.now()
+          
+          // Update confidence display
           setConfidence(data.confidence)
-
-          // Only update if confidence is above threshold
-          if (data.confidence > 0.6) {
-            setTranslatedText(prev => {
-              // Avoid duplicate consecutive signs
-              const words = prev.trim().split(' ')
-              if (words[words.length - 1] !== data.sign) {
-                return prev + ' ' + data.sign
-              }
-              return prev
-            })
-
-            // Speak if sound is enabled
-            if (soundEnabled && mode === 'sign-to-speech') {
-              speakText(data.sign)
+          
+          // Filter out low confidence and "Unknown" predictions
+          if (data.sign && data.sign !== 'Unknown' && data.confidence > confidenceThreshold) {
+            // Buffer the sign to ensure consistency
+            if (signBuffer.sign === data.sign) {
+              setSignBuffer(prev => ({ ...prev, count: prev.count + 1 }))
+            } else {
+              setSignBuffer({ sign: data.sign, count: 1 })
             }
+            
+            // Only accept sign if it appears consistently (at least 3 times)
+            if (signBuffer.count >= 3) {
+              // Check if this is a new sign (not the same as last spoken)
+              // or if enough time has passed (3 seconds) to repeat the same sign
+              const isNewSign = data.sign !== lastSpokenSign
+              const enoughTimePassed = currentTime - lastSignTime > 3000
+              
+              if (isNewSign || enoughTimePassed) {
+                setCurrentSign(data.sign)
+                
+                // Handle sentence mode
+                if (sentenceMode) {
+                  // Add to current sentence
+                  setCurrentSentence(prev => {
+                    // Avoid immediate duplicates in sentence
+                    if (prev[prev.length - 1] !== data.sign) {
+                      return [...prev, data.sign]
+                    }
+                    return prev
+                  })
+                  
+                  // Clear any existing timer
+                  if (sentenceTimer) {
+                    clearTimeout(sentenceTimer)
+                  }
+                  
+                  // Set new timer to speak sentence after 2 seconds of no new signs
+                  const timer = setTimeout(() => {
+                    setCurrentSentence(prevSentence => {
+                      if (prevSentence.length > 0) {
+                        const sentence = buildSentence(prevSentence)
+                        setTranslatedText(prev => prev + ' ' + sentence + '.')
+                        
+                        if (soundEnabled && mode === 'sign-to-speech') {
+                          speakText(sentence)
+                        }
+                        
+                        // Return empty array to clear sentence
+                        return []
+                      }
+                      return prevSentence
+                    })
+                  }, 2000)
+                  
+                  setSentenceTimer(timer)
+                } else {
+                  // Original word-by-word mode
+                  setTranslatedText(prev => {
+                    const words = prev.trim().split(' ')
+                    if (words[words.length - 1] !== data.sign) {
+                      return prev + ' ' + data.sign
+                    }
+                    return prev
+                  })
+                  
+                  if (soundEnabled && mode === 'sign-to-speech') {
+                    speakText(data.sign)
+                  }
+                }
+                
+                setLastSpokenSign(data.sign)
+                setLastSignTime(currentTime)
+                
+                // Reset buffer after successful recognition
+                setSignBuffer({ sign: '', count: 0 })
+              }
+            }
+          } else if (data.confidence < 0.5) {
+            // Reset buffer if confidence drops too low
+            setSignBuffer({ sign: '', count: 0 })
           }
+        } else if (data.type === 'gesture_metadata') {
+          // Handle gesture metadata for better visualization
+          setGestureMetadata({
+            hand: data.hand,
+            isMotion: data.is_motion,
+            duration: data.duration,
+            frames: data.frames
+          })
         } else if (data.type === 'signs') {
           // Handle speech to sign response
           if (data.signs && data.signs.length > 0) {
@@ -114,7 +197,7 @@ export default function TranslatePage() {
         console.error('Error processing message:', error)
       }
     }
-  }, [lastMessage, soundEnabled, mode])
+  }, [lastMessage, soundEnabled, mode, signBuffer, lastSpokenSign, lastSignTime])
 
   // Send tracking data when available
   useEffect(() => {
@@ -148,6 +231,65 @@ export default function TranslatePage() {
       utterance.pitch = 1
       speechSynthesis.speak(utterance)
     }
+  }
+  
+  // Build grammatically correct sentence from signs
+  const buildSentence = (signs: string[]) => {
+    // Convert sign names to proper words and build sentence
+    const words = signs.map(sign => {
+      // Convert sign format to readable text
+      const word = sign.toLowerCase().replace(/_/g, ' ')
+      
+      // Handle special cases
+      switch(sign.toUpperCase()) {
+        case 'I_LOVE_YOU': return 'I love you'
+        case 'THANK_YOU': return 'thank you'
+        case 'HOW_ARE_YOU': return 'how are you'
+        case 'I_NEED_HELP': return 'I need help'
+        case 'GOOD_MORNING': return 'good morning'
+        case 'GOOD': return 'good'
+        case 'BAD': return 'bad'
+        case 'YES': return 'yes'
+        case 'NO': return 'no'
+        case 'HELLO': return 'hello'
+        case 'HELP': return 'help'
+        case 'PLEASE': return 'please'
+        case 'SORRY': return 'sorry'
+        case 'HUNGRY': return 'hungry'
+        case 'THIRSTY': return 'thirsty'
+        case 'WATER': return 'water'
+        case 'FOOD': return 'food'
+        case 'BATHROOM': return 'bathroom'
+        case 'ONE': return 'one'
+        case 'TWO': return 'two'
+        case 'THREE': return 'three'
+        case 'FOUR': return 'four'
+        case 'FIVE': return 'five'
+        default: return word
+      }
+    })
+    
+    // Build sentence with basic grammar rules
+    let sentence = words.join(' ')
+    
+    // Add "I am" for states
+    if (words.includes('hungry') || words.includes('thirsty') || words.includes('tired') || words.includes('happy') || words.includes('sad')) {
+      if (!words.includes('i') && !words.includes('you')) {
+        sentence = 'I am ' + sentence
+      }
+    }
+    
+    // Add "I need" for needs
+    if (words.includes('help') || words.includes('water') || words.includes('food') || words.includes('bathroom')) {
+      if (!words.includes('i') && !words.includes('need')) {
+        sentence = 'I need ' + sentence
+      }
+    }
+    
+    // Capitalize first letter
+    sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1)
+    
+    return sentence
   }
 
   // Toggle recording
@@ -186,7 +328,19 @@ export default function TranslatePage() {
     setCurrentSign('')
     setFingerSpelling('')
     setConfidence(0)
+    setLastSpokenSign('')
+    setLastSignTime(0)
+    setSignBuffer({ sign: '', count: 0 })
+    setCurrentSentence([])
+    if (sentenceTimer) {
+      clearTimeout(sentenceTimer)
+      setSentenceTimer(null)
+    }
     resetTranscript()
+    // Stop any ongoing speech
+    if ('speechSynthesis' in window) {
+      speechSynthesis.cancel()
+    }
   }
 
   return (
@@ -236,6 +390,18 @@ export default function TranslatePage() {
             >
               {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
             </motion.button>
+            
+            {/* Settings toggle */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowSettings(!showSettings)}
+              className={`p-2 rounded-lg transition ${showSettings ? 'bg-blue-500/20 text-blue-400' : 'glass hover:bg-white/10'
+                }`}
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </motion.button>
           </div>
         </div>
       </header>
@@ -243,6 +409,85 @@ export default function TranslatePage() {
       {/* Main Content */}
       <main className="pt-20 px-4 pb-8">
         <div className="max-w-7xl mx-auto">
+          {/* Settings Panel */}
+          <AnimatePresence>
+            {showSettings && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mb-6 glass rounded-2xl p-6"
+              >
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-blue-400" />
+                  Recognition Settings
+                </h3>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Confidence Threshold */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Confidence Threshold: {Math.round(confidenceThreshold * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="50"
+                      max="95"
+                      value={confidenceThreshold * 100}
+                      onChange={(e) => setConfidenceThreshold(parseInt(e.target.value) / 100)}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>Less Strict</span>
+                      <span>More Strict</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Higher values reduce false positives but may miss some signs
+                    </p>
+                  </div>
+                  
+                  {/* Sentence Mode */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Sentence Mode
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setSentenceMode(!sentenceMode)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                          sentenceMode ? 'bg-blue-600' : 'bg-gray-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                          sentenceMode ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                      <span className="text-sm text-gray-300">
+                        {sentenceMode ? 'Build sentences' : 'Word by word'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      {sentenceMode 
+                        ? 'Groups signs into sentences before speaking'
+                        : 'Speaks each sign immediately'}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <p className="text-sm text-gray-400">
+                    Tips for better recognition:
+                  </p>
+                  <ul className="text-xs text-gray-500 mt-2 space-y-1">
+                    <li>• Ensure good lighting with no backlight</li>
+                    <li>• Keep hands clearly visible in frame</li>
+                    <li>• Hold signs steady for 1-2 seconds</li>
+                    <li>• Make deliberate, clear movements</li>
+                  </ul>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {/* Mode Switcher */}
           <div className="flex justify-center mb-6">
             <motion.div
@@ -318,27 +563,108 @@ export default function TranslatePage() {
                   </div>
 
                   {/* Confidence Bar */}
-                  <ConfidenceBar confidence={confidence} threshold={0.6} />
+                  <ConfidenceBar confidence={confidence} threshold={0.75} />
 
-                  {/* Tracking Status */}
-                  {trackingData && (
-                    <div className="glass rounded-xl p-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-400">Tracking:</span>
-                        <div className="flex gap-2">
-                          {trackingData.leftHandLandmarks && (
-                            <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Left Hand</span>
-                          )}
-                          {trackingData.rightHandLandmarks && (
-                            <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Right Hand</span>
-                          )}
-                          {trackingData.faceLandmarks && (
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">Face</span>
-                          )}
+                  {/* Recognition Status */}
+                  <div className="glass rounded-xl p-4">
+                    <div className="space-y-3">
+                      {/* Tracking Status */}
+                      {trackingData && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Tracking:</span>
+                          <div className="flex gap-2">
+                            {trackingData.leftHandLandmarks && (
+                              <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Left Hand</span>
+                            )}
+                            {trackingData.rightHandLandmarks && (
+                              <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Right Hand</span>
+                            )}
+                            {trackingData.faceLandmarks && (
+                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">Face</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
+                      
+                      {/* Recognition Buffer Status */}
+                      {signBuffer.sign && signBuffer.count > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Detecting:</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-yellow-400">{signBuffer.sign}</span>
+                            <div className="flex gap-1">
+                              {[1, 2, 3].map((i) => (
+                                <div
+                                  key={i}
+                                  className={`w-2 h-2 rounded-full ${
+                                    i <= signBuffer.count 
+                                      ? 'bg-yellow-400' 
+                                      : 'bg-gray-600'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Last Recognized Sign */}
+                      {lastSpokenSign && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Last Sign:</span>
+                          <span className="text-sm text-green-400">{lastSpokenSign}</span>
+                        </div>
+                      )}
+                      
+                      {/* Gesture Metadata */}
+                      {gestureMetadata && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-400">Hand:</span>
+                              <span className="text-blue-400">{gestureMetadata.hand}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-400">Type:</span>
+                              <span className={`${gestureMetadata.isMotion ? 'text-yellow-400' : 'text-green-400'}`}>
+                                {gestureMetadata.isMotion ? 'Dynamic' : 'Static'}
+                              </span>
+                            </div>
+                            {gestureMetadata.duration && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-400">Duration:</span>
+                                <span className="text-gray-300">{gestureMetadata.duration.toFixed(1)}s</span>
+                              </div>
+                            )}
+                            {gestureMetadata.frames && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-400">Frames:</span>
+                                <span className="text-gray-300">{gestureMetadata.frames}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Current Sentence Being Built */}
+                      {sentenceMode && currentSentence.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                          <span className="text-sm text-gray-400">Building sentence:</span>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {currentSentence.map((word, index) => (
+                              <span 
+                                key={index}
+                                className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-sm"
+                              >
+                                {word.toLowerCase()}
+                              </span>
+                            ))}
+                            <span className="animate-pulse text-gray-500">...</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </>
               ) : (
                 <>
@@ -375,15 +701,39 @@ export default function TranslatePage() {
                   )}
                 </motion.button>
 
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={clearAll}
-                  className="px-6 py-3 glass border border-white/20 rounded-xl font-semibold flex items-center gap-2 hover:bg-white/10 transition"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  Clear
-                </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={clearAll}
+                      className="px-6 py-3 glass border border-white/20 rounded-xl font-semibold flex items-center gap-2 hover:bg-white/10 transition"
+                    >
+                      <RefreshCw className="w-5 h-5" />
+                      Clear
+                    </motion.button>
+                    
+                    {/* Speak Sentence Button (only in sentence mode) */}
+                    {sentenceMode && currentSentence.length > 0 && (
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          const sentence = buildSentence(currentSentence)
+                          setTranslatedText(prev => prev + ' ' + sentence + '.')
+                          if (soundEnabled) {
+                            speakText(sentence)
+                          }
+                          setCurrentSentence([])
+                          if (sentenceTimer) {
+                            clearTimeout(sentenceTimer)
+                            setSentenceTimer(null)
+                          }
+                        }}
+                        className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold flex items-center gap-2 hover:shadow-2xl hover:shadow-green-500/25 transition"
+                      >
+                        <Volume2 className="w-5 h-5" />
+                        Speak Sentence
+                      </motion.button>
+                    )}
               </div>
             </motion.div>
 

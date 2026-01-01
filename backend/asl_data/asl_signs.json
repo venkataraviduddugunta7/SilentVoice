@@ -1,0 +1,582 @@
+{
+  "A": {
+    "fingers": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "in",
+    "description": "Fist with thumb on side"
+  },
+  "B": {
+    "fingers": [
+      1,
+      1,
+      1,
+      1,
+      0
+    ],
+    "thumb": "across",
+    "description": "Flat hand, thumb across palm"
+  },
+  "C": {
+    "fingers": [
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "thumb": "out",
+    "description": "Curved hand like C"
+  },
+  "D": {
+    "fingers": [
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "touch",
+    "description": "Index up, others touch thumb"
+  },
+  "E": {
+    "fingers": [
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0
+    ],
+    "thumb": "in",
+    "description": "Fingers bent, thumb in"
+  },
+  "F": {
+    "fingers": [
+      0,
+      1,
+      1,
+      1,
+      0
+    ],
+    "thumb": "touch_index",
+    "description": "OK sign"
+  },
+  "G": {
+    "fingers": [
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "out",
+    "description": "Index pointing, thumb out"
+  },
+  "H": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "thumb": "out",
+    "description": "Index and middle horizontal"
+  },
+  "I": {
+    "fingers": [
+      0,
+      0,
+      0,
+      1,
+      0
+    ],
+    "thumb": "in",
+    "description": "Pinky up"
+  },
+  "J": {
+    "fingers": [
+      0,
+      0,
+      0,
+      1,
+      0
+    ],
+    "thumb": "in",
+    "motion": "hook",
+    "description": "I with J motion"
+  },
+  "K": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "thumb": "between",
+    "description": "Index and middle up, thumb between"
+  },
+  "L": {
+    "fingers": [
+      1,
+      0,
+      0,
+      0,
+      1
+    ],
+    "thumb": "out",
+    "description": "L shape"
+  },
+  "M": {
+    "fingers": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "under_three",
+    "description": "Thumb under three fingers"
+  },
+  "N": {
+    "fingers": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "under_two",
+    "description": "Thumb under two fingers"
+  },
+  "O": {
+    "fingers": [
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "thumb": "touch",
+    "description": "O shape"
+  },
+  "P": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "thumb": "between",
+    "motion": "down",
+    "description": "K pointing down"
+  },
+  "Q": {
+    "fingers": [
+      1,
+      0,
+      0,
+      0,
+      1
+    ],
+    "thumb": "out",
+    "motion": "down",
+    "description": "G pointing down"
+  },
+  "R": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "thumb": "cross",
+    "description": "Crossed fingers"
+  },
+  "S": {
+    "fingers": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "over",
+    "description": "Fist with thumb over fingers"
+  },
+  "T": {
+    "fingers": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "between_index",
+    "description": "Thumb between index and middle"
+  },
+  "U": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "thumb": "out",
+    "description": "Two fingers up together"
+  },
+  "V": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "thumb": "out",
+    "spread": true,
+    "description": "Peace sign"
+  },
+  "W": {
+    "fingers": [
+      1,
+      1,
+      1,
+      0,
+      0
+    ],
+    "thumb": "out",
+    "description": "Three fingers up"
+  },
+  "X": {
+    "fingers": [
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "in",
+    "bent": true,
+    "description": "Index bent like hook"
+  },
+  "Y": {
+    "fingers": [
+      0,
+      0,
+      0,
+      1,
+      1
+    ],
+    "thumb": "out",
+    "description": "Thumb and pinky out"
+  },
+  "Z": {
+    "fingers": [
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "out",
+    "motion": "zigzag",
+    "description": "Index draws Z"
+  },
+  "1": {
+    "fingers": [
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "thumb": "in",
+    "description": "Index finger up"
+  },
+  "2": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "thumb": "in",
+    "description": "Index and middle up"
+  },
+  "3": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      1
+    ],
+    "thumb": "out",
+    "description": "Thumb, index, middle up"
+  },
+  "4": {
+    "fingers": [
+      1,
+      1,
+      1,
+      1,
+      0
+    ],
+    "thumb": "in",
+    "description": "Four fingers up"
+  },
+  "5": {
+    "fingers": [
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "thumb": "out",
+    "description": "All fingers up"
+  },
+  "6": {
+    "fingers": [
+      1,
+      1,
+      1,
+      0,
+      0
+    ],
+    "thumb": "touch_pinky",
+    "description": "Three up, thumb touches pinky"
+  },
+  "7": {
+    "fingers": [
+      1,
+      1,
+      0,
+      1,
+      0
+    ],
+    "thumb": "touch_ring",
+    "description": "Thumb touches ring finger"
+  },
+  "8": {
+    "fingers": [
+      1,
+      0,
+      1,
+      1,
+      0
+    ],
+    "thumb": "touch_middle",
+    "description": "Thumb touches middle"
+  },
+  "9": {
+    "fingers": [
+      0,
+      1,
+      1,
+      1,
+      0
+    ],
+    "thumb": "touch_index",
+    "description": "Thumb touches index"
+  },
+  "10": {
+    "fingers": [
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "thumb": "up",
+    "motion": "shake",
+    "description": "Thumbs up with shake"
+  },
+  "HELLO": {
+    "motion": "wave",
+    "hand": "open",
+    "description": "Open hand waving"
+  },
+  "GOODBYE": {
+    "motion": "wave_fingers",
+    "hand": "open",
+    "description": "Fingers wave down"
+  },
+  "PLEASE": {
+    "motion": "circular",
+    "location": "chest",
+    "hand": "flat",
+    "description": "Circular motion on chest"
+  },
+  "THANK_YOU": {
+    "motion": "forward",
+    "start": "chin",
+    "hand": "flat",
+    "description": "Hand from chin forward"
+  },
+  "SORRY": {
+    "motion": "circular",
+    "location": "chest",
+    "hand": "fist",
+    "description": "Fist circles on chest"
+  },
+  "YES": {
+    "motion": "nod",
+    "hand": "fist",
+    "description": "Fist nods like head"
+  },
+  "NO": {
+    "fingers": [
+      1,
+      1,
+      0,
+      0,
+      0
+    ],
+    "motion": "close",
+    "description": "Two fingers close on thumb"
+  },
+  "HELP": {
+    "hand": "fist",
+    "support": "flat",
+    "motion": "lift",
+    "description": "Fist on flat palm, lift up"
+  },
+  "LOVE": {
+    "hand": "fist",
+    "motion": "cross",
+    "location": "chest",
+    "description": "Arms cross on chest"
+  },
+  "FRIEND": {
+    "fingers": "hook",
+    "motion": "flip",
+    "description": "Index fingers hook and flip"
+  },
+  "FAMILY": {
+    "hand": "f",
+    "motion": "circle",
+    "description": "F hands in circle"
+  },
+  "WATER": {
+    "hand": "w",
+    "location": "chin",
+    "motion": "tap",
+    "description": "W taps chin"
+  },
+  "FOOD": {
+    "hand": "flat",
+    "motion": "to_mouth",
+    "description": "Hand to mouth repeatedly"
+  },
+  "HUNGRY": {
+    "hand": "c",
+    "motion": "down",
+    "location": "chest",
+    "description": "C hand down chest"
+  },
+  "HAPPY": {
+    "hand": "flat",
+    "motion": "up",
+    "location": "chest",
+    "description": "Hands brush up on chest"
+  },
+  "SAD": {
+    "hand": "open",
+    "motion": "down",
+    "location": "face",
+    "description": "Hands pull down from face"
+  },
+  "TIRED": {
+    "hand": "flat",
+    "location": "chest",
+    "motion": "drop",
+    "description": "Hands drop from chest"
+  },
+  "GOOD": {
+    "hand": "flat",
+    "motion": "forward",
+    "start": "chin",
+    "description": "Hand from chin forward"
+  },
+  "BAD": {
+    "hand": "flat",
+    "motion": "down",
+    "start": "chin",
+    "description": "Hand from chin down"
+  },
+  "MORE": {
+    "hand": "flat_o",
+    "motion": "tap",
+    "description": "Fingertips tap together"
+  },
+  "FINISHED": {
+    "hand": "open",
+    "motion": "flip",
+    "description": "Hands flip over"
+  },
+  "WANT": {
+    "hand": "claw",
+    "motion": "pull",
+    "description": "Claw hands pull toward body"
+  },
+  "NEED": {
+    "hand": "x",
+    "motion": "down",
+    "description": "X hand moves down"
+  },
+  "BATHROOM": {
+    "hand": "t",
+    "motion": "shake",
+    "description": "T hand shakes"
+  },
+  "WORK": {
+    "hand": "fist",
+    "motion": "tap",
+    "description": "Fist taps on fist"
+  },
+  "SCHOOL": {
+    "hand": "flat",
+    "motion": "clap",
+    "description": "Hands clap twice"
+  },
+  "HOME": {
+    "hand": "flat_o",
+    "motion": "touch",
+    "location": "cheek_chin",
+    "description": "Fingers touch cheek to chin"
+  },
+  "TIME": {
+    "hand": "index",
+    "location": "wrist",
+    "motion": "tap",
+    "description": "Index taps wrist"
+  },
+  "TODAY": {
+    "hand": "y",
+    "motion": "down",
+    "description": "Y hands move down"
+  },
+  "TOMORROW": {
+    "hand": "thumb",
+    "location": "cheek",
+    "motion": "forward",
+    "description": "Thumb from cheek forward"
+  },
+  "YESTERDAY": {
+    "hand": "y",
+    "location": "chin",
+    "motion": "back",
+    "description": "Y from chin backward"
+  }
+}

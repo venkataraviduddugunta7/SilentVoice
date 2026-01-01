@@ -5,6 +5,12 @@ from websocket_handler import sign_handler  # Enhanced handler
 from services.inference import get_inference_service
 from services.asl_dictionary import get_asl_recognizer
 from services.text2sign import text_to_signs
+try:
+    from services.advanced_recognition import AdvancedASLRecognizer
+    advanced_recognizer = AdvancedASLRecognizer()
+except ImportError:
+    advanced_recognizer = None
+    logger.warning("Advanced recognition not available")
 import json
 import logging
 import os
@@ -165,48 +171,111 @@ def process_sign_language(pose_data: List[List[Dict[str, float]]]) -> Tuple[str,
         
         # Wave detection (HELLO) - open hand at shoulder height
         if hand["is_open"] and hand["hand_height"] < 0.5:
-            return "HELLO", 0.92
+            # Check if hand is moving (would need motion detection)
+            if hand["hand_center_x"] > 0.4 and hand["hand_center_x"] < 0.6:
+                return "HELLO", 0.92
+            else:
+                return "HELLO", 0.75
         
         # Thumbs up (GOOD/YES)
         elif hand["thumb_up"] and hand["fingers_up"] == 0:
-            return "GOOD", 0.95
+            if hand["hand_height"] < 0.5:
+                return "GOOD", 0.95
+            else:
+                return "YES", 0.90
         
-        # Pointing (YOU/THERE)
+        # Pointing (YOU/THERE/THAT)
         elif hand["is_pointing"]:
-            return "YOU", 0.88
+            if hand["hand_center_x"] > 0.6:
+                return "YOU", 0.88
+            elif hand["hand_center_x"] < 0.4:
+                return "ME", 0.88
+            else:
+                return "THAT", 0.85
         
         # Peace sign
         elif hand["is_peace"]:
             return "PEACE", 0.90
         
-        # OK sign
+        # OK sign (three fingers up, thumb and index making circle)
         elif hand["is_ok"]:
             return "OK", 0.87
         
-        # Fist (NO/STOP)
+        # Fist gestures
         elif hand["is_fist"]:
             if hand["hand_height"] < 0.4:
                 return "STOP", 0.85
-            else:
+            elif hand["hand_height"] > 0.7:
                 return "NO", 0.80
+            else:
+                # Fist at chest could be different signs
+                if hand["hand_center_x"] > 0.45 and hand["hand_center_x"] < 0.55:
+                    return "SORRY", 0.75  # Fist on chest
+                else:
+                    return "NO", 0.70
         
-        # Open hand low (HELP)
-        elif hand["is_open"] and hand["hand_height"] > 0.6:
-            return "HELP", 0.75
+        # Open hand gestures based on position
+        elif hand["is_open"]:
+            if hand["hand_height"] > 0.7:
+                return "HELP", 0.80  # Open hand low
+            elif hand["hand_height"] < 0.3:
+                return "PLEASE", 0.75  # Open hand high
+            elif hand["hand_center_x"] < 0.3:
+                return "COME", 0.70  # Open hand to side
+            elif hand["hand_center_x"] > 0.7:
+                return "GO", 0.70  # Open hand other side
+            else:
+                return "WAIT", 0.65  # Open hand center
         
-        # Number gestures
+        # Number gestures - more accurate detection
         elif hand["fingers_up"] == 1:
-            return "ONE", 0.93
+            if hand["index_up"]:
+                return "ONE", 0.95
+            elif hand["thumb_up"]:
+                return "GOOD", 0.85
+            else:
+                return "ONE", 0.80
         elif hand["fingers_up"] == 2:
-            return "TWO", 0.93
+            if hand["index_up"] and hand["middle_up"]:
+                return "TWO", 0.95
+            else:
+                return "TWO", 0.85
         elif hand["fingers_up"] == 3:
-            return "THREE", 0.93
+            if hand["index_up"] and hand["middle_up"] and hand["ring_up"]:
+                return "THREE", 0.95
+            else:
+                return "THREE", 0.85
         elif hand["fingers_up"] == 4:
-            return "FOUR", 0.93
+            if not hand["thumb_up"]:
+                return "FOUR", 0.95
+            else:
+                return "FOUR", 0.85
         elif hand["fingers_up"] == 5 or (hand["fingers_up"] == 4 and hand["thumb_up"]):
-            return "FIVE", 0.93
+            return "FIVE", 0.95
+        
+        # Special hand shapes
+        elif hand["thumb_up"] and hand["pinky_up"] and hand["fingers_up"] == 2:
+            return "I_LOVE_YOU", 0.90  # ILY sign
+        elif hand["index_up"] and not hand["middle_up"] and not hand["ring_up"] and not hand["pinky_up"]:
+            if hand["hand_height"] < 0.4:
+                return "WAIT", 0.80  # Index up = wait
+            else:
+                return "ONE", 0.85
+        
+        # Check for letters (finger spelling)
+        elif hand["fingers_up"] == 0 and hand["thumb_up"]:
+            return "LETTER_A", 0.75
+        elif hand["fingers_up"] == 4 and not hand["thumb_up"]:
+            return "LETTER_B", 0.75
+        
         else:
-            return "HELLO", 0.55
+            # Default based on hand position
+            if hand["hand_height"] < 0.3:
+                return "UP", 0.60
+            elif hand["hand_height"] > 0.7:
+                return "DOWN", 0.60
+            else:
+                return "UNKNOWN", 0.45
             
     elif num_hands == 2:
         # Two hand gestures - enhanced detection
@@ -404,8 +473,38 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                     
                     logger.info(f"Received pose data: {len(pose_data)} hands")
                     
-                    # Try ASL dictionary recognition first
-                    asl_recognizer = get_asl_recognizer()
+                    # Initialize recognition variables
+                    predicted_word = "UNKNOWN"
+                    confidence = 0.0
+                    
+                    # Try advanced recognizer first if available
+                    if advanced_recognizer and json_data.get("type") == "holistic":
+                        frame_data = {
+                            "timestamp": datetime.now().timestamp(),
+                            "leftHandLandmarks": holistic_data.get("leftHandLandmarks"),
+                            "rightHandLandmarks": holistic_data.get("rightHandLandmarks"),
+                            "poseLandmarks": pose_landmarks,
+                            "faceLandmarks": face_landmarks
+                        }
+                        
+                        recognized = advanced_recognizer.process_frame(frame_data)
+                        if recognized:
+                            predicted_word = recognized.sign
+                            confidence = recognized.confidence
+                            
+                            # Send additional metadata
+                            await websocket.send_text(json.dumps({
+                                "type": "gesture_metadata",
+                                "hand": recognized.hand,
+                                "is_motion": recognized.is_motion,
+                                "duration": recognized.duration,
+                                "frames": recognized.frames
+                            }))
+                    
+                    # Fallback to ASL dictionary if advanced recognition didn't work
+                    if confidence < 0.5:
+                        # Try ASL dictionary recognition
+                        asl_recognizer = get_asl_recognizer()
                     
                     # Store in gesture history for dynamic recognition
                     if not hasattr(websocket, 'gesture_history'):
@@ -417,21 +516,25 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                     
                     # Try dynamic recognition if we have enough frames
                     if len(websocket.gesture_history) >= 5:
-                        predicted_word, confidence = asl_recognizer.recognize_dynamic_sign(
+                        dict_word, dict_confidence = asl_recognizer.recognize_dynamic_sign(
                             websocket.gesture_history,
                             pose_sequence=[pose_landmarks] if pose_landmarks else None,
                             face_sequence=[face_landmarks] if face_landmarks else None
                         )
+                        if dict_confidence > confidence:
+                            predicted_word = dict_word
+                            confidence = dict_confidence
                     else:
                         # Try static recognition
                         if pose_data and len(pose_data) > 0:
-                            predicted_word, confidence = asl_recognizer.recognize_static_sign(
+                            static_word, static_confidence = asl_recognizer.recognize_static_sign(
                                 pose_data[0] if pose_data else [],
                                 pose_landmarks,
                                 face_landmarks
                             )
-                        else:
-                            predicted_word, confidence = "UNKNOWN", 0.0
+                            if static_confidence > confidence:
+                                predicted_word = static_word
+                                confidence = static_confidence
                     
                     # If ASL recognition fails, try ML model
                     if confidence < 0.5:
@@ -451,13 +554,15 @@ async def websocket_sign_endpoint(websocket: WebSocket):
                         if rule_confidence > confidence:
                             predicted_word, confidence = rule_word, rule_confidence
                     
-                    # Send prediction back to client
-                    await websocket.send_text(json.dumps({
-                        "type": "prediction",
-                        "sign": predicted_word,
-                        "confidence": confidence,
-                        "timestamp": datetime.now().isoformat()
-                    }))
+                    # Send prediction back to client (with filtering)
+                    # Only send if confidence is reasonable or if it's a clear gesture
+                    if confidence > 0.4 or (predicted_word != "UNKNOWN" and confidence > 0.3):
+                        await websocket.send_text(json.dumps({
+                            "type": "prediction",
+                            "sign": predicted_word,
+                            "confidence": confidence,
+                            "timestamp": datetime.now().isoformat()
+                        }))
                     
                 elif json_data.get("type") == "speech":
                     # Handle speech to sign conversion
