@@ -30,7 +30,9 @@ import DebugPanel from '@/components/DebugPanel'
 import { useWebSocketStable } from '@/hooks/useWebSocketStable'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useMediaPipeHolistic } from '@/hooks/useMediaPipeHolistic'
+import { useMediaPermissions } from '@/hooks/useMediaPermissions'
 import { WEBSOCKET_URL } from '@/config/api'
+import PermissionPrompt from '@/components/PermissionPrompt'
 
 // Dynamically import 3D avatar to avoid SSR issues
 const HumanAvatar3D = dynamic(() => import('@/components/HumanAvatar3D'), {
@@ -58,6 +60,7 @@ export default function TranslatePage() {
   const [currentSentence, setCurrentSentence] = useState<string[]>([])
   const [sentenceTimer, setSentenceTimer] = useState<NodeJS.Timeout | null>(null)
   const [gestureMetadata, setGestureMetadata] = useState<any>(null)
+  const [showPermissionPrompt, setShowPermissionPrompt] = useState(false)
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -90,6 +93,14 @@ export default function TranslatePage() {
     stopTracking,
     error: trackingError
   } = useMediaPipeHolistic(videoRef, canvasRef)
+  
+  const {
+    permissions,
+    error: permissionError,
+    requestCameraPermission,
+    requestMicrophonePermission,
+    requestAllPermissions
+  } = useMediaPermissions()
 
   // Process incoming WebSocket messages with improved filtering
   useEffect(() => {
@@ -102,7 +113,7 @@ export default function TranslatePage() {
           
           // Update confidence display
           setConfidence(data.confidence)
-          
+
           // Filter out low confidence and "Unknown" predictions
           if (data.sign && data.sign !== 'Unknown' && data.confidence > confidenceThreshold) {
             // Buffer the sign to ensure consistency
@@ -167,9 +178,9 @@ export default function TranslatePage() {
                     return prev
                   })
                   
-                  if (soundEnabled && mode === 'sign-to-speech') {
-                    speakText(data.sign)
-                  }
+            if (soundEnabled && mode === 'sign-to-speech') {
+              speakText(data.sign)
+            }
                 }
                 
                 setLastSpokenSign(data.sign)
@@ -205,6 +216,18 @@ export default function TranslatePage() {
     }
   }, [lastMessage, soundEnabled, mode, signBuffer, lastSpokenSign, lastSignTime])
 
+  // Check permissions on mount
+  useEffect(() => {
+    const checkInitialPermissions = async () => {
+      const hasVisited = localStorage.getItem('silentvoice_permissions_checked')
+      if (!hasVisited) {
+        localStorage.setItem('silentvoice_permissions_checked', 'true')
+        setTimeout(() => setShowPermissionPrompt(true), 1500)
+      }
+    }
+    checkInitialPermissions()
+  }, [])
+
   // Send tracking data when available
   useEffect(() => {
     if (trackingData && mode === 'sign-to-speech' && isRecording) {
@@ -238,7 +261,7 @@ export default function TranslatePage() {
       speechSynthesis.speak(utterance)
     }
   }
-  
+
   // Build grammatically correct sentence from signs
   const buildSentence = (signs: string[]) => {
     // Convert sign names to proper words and build sentence
@@ -298,8 +321,23 @@ export default function TranslatePage() {
     return sentence
   }
 
-  // Toggle recording
-  const toggleRecording = useCallback(() => {
+  // Toggle recording with permission check
+  const toggleRecording = useCallback(async () => {
+    // Check permissions first
+    if (!isRecording) {
+      if (mode === 'sign-to-speech') {
+        if (permissions.camera !== 'granted') {
+          setShowPermissionPrompt(true)
+          return
+        }
+      } else {
+        if (permissions.microphone !== 'granted') {
+          setShowPermissionPrompt(true)
+          return
+        }
+      }
+    }
+    
     if (mode === 'sign-to-speech') {
       if (isTracking) {
         stopTracking()
@@ -314,7 +352,7 @@ export default function TranslatePage() {
       }
     }
     setIsRecording(!isRecording)
-  }, [mode, isTracking, isListening, startTracking, stopTracking, startListening, stopListening])
+  }, [mode, isTracking, isListening, startTracking, stopTracking, startListening, stopListening, isRecording, permissions])
 
   // Switch mode
   const switchMode = () => {
@@ -349,8 +387,32 @@ export default function TranslatePage() {
     }
   }
 
+  const handlePermissionRequest = async () => {
+    let success = false
+    
+    if (mode === 'sign-to-speech') {
+      success = await requestCameraPermission()
+    } else {
+      success = await requestMicrophonePermission()
+    }
+    
+    if (success) {
+      setShowPermissionPrompt(false)
+      setTimeout(() => toggleRecording(), 500)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black">
+      <PermissionPrompt
+        show={showPermissionPrompt}
+        onRequestPermissions={handlePermissionRequest}
+        onClose={() => setShowPermissionPrompt(false)}
+        cameraRequired={mode === 'sign-to-speech'}
+        microphoneRequired={mode === 'speech-to-sign'}
+        error={permissionError}
+      />
+      
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -371,7 +433,7 @@ export default function TranslatePage() {
               connectionStatus === 'connecting' ? 'bg-yellow-500/20 text-yellow-400' :
               connectionStatus === 'error' ? 'bg-red-500/20 text-red-400' :
               'bg-gray-500/20 text-gray-400'
-            }`}>
+              }`}>
               <div className={`w-2 h-2 rounded-full ${
                 connectionStatus === 'connected' ? 'bg-green-400' : 
                 connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
@@ -720,15 +782,15 @@ export default function TranslatePage() {
                   )}
                 </motion.button>
 
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={clearAll}
-                      className="px-6 py-3 glass border border-white/20 rounded-xl font-semibold flex items-center gap-2 hover:bg-white/10 transition"
-                    >
-                      <RefreshCw className="w-5 h-5" />
-                      Clear
-                    </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={clearAll}
+                  className="px-6 py-3 glass border border-white/20 rounded-xl font-semibold flex items-center gap-2 hover:bg-white/10 transition"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  Clear
+                </motion.button>
                     
                     {/* Speak Sentence Button (only in sentence mode) */}
                     {sentenceMode && currentSentence.length > 0 && (
