@@ -60,12 +60,14 @@ export default function TestAvatarPage() {
         {/* Avatar Display */}
         <div className="bg-gray-800 rounded-lg p-4">
           <h2 className="text-xl font-semibold mb-4">Your Ready Player Me Avatar:</h2>
-          <div className="aspect-video bg-black rounded-lg overflow-hidden">
-            <HumanAvatar3D 
-              signSequence={testWord}
-              isAnimating={true}
-              useReadyPlayerMe={true}
-            />
+          <div className="relative w-full">
+            <div className="aspect-[4/3] md:aspect-video bg-black rounded-lg overflow-hidden max-h-[60vh]">
+              <HumanAvatar3D 
+                signSequence={testWord}
+                isAnimating={true}
+                useReadyPlayerMe={true}
+              />
+            </div>
           </div>
           <p className="text-sm text-gray-400 mt-4 text-center">
             Drag to rotate • Scroll to zoom • Click buttons above to test animations

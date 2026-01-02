@@ -32,12 +32,14 @@ export default function AvatarAdjustPage() {
           <div className="lg:col-span-2">
             <div className="bg-gray-800 rounded-lg p-4">
               <h2 className="text-xl font-semibold mb-4">Upper Body View</h2>
-              <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                <HumanAvatar3D 
-                  signSequence={testWord}
-                  isAnimating={true}
-                  useReadyPlayerMe={true}
-                />
+              <div className="relative w-full">
+                <div className="aspect-[4/3] md:aspect-video bg-black rounded-lg overflow-hidden max-h-[50vh] md:max-h-[60vh] lg:max-h-[70vh]">
+                  <HumanAvatar3D 
+                    signSequence={testWord}
+                    isAnimating={true}
+                    useReadyPlayerMe={true}
+                  />
+                </div>
               </div>
             </div>
           </div>

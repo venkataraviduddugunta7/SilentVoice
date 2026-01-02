@@ -604,7 +604,7 @@ export default function TranslatePage() {
           </div>
 
           {/* Main Grid */}
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-4 md:gap-6">
             {/* Input Panel */}
             <motion.div
               initial={{ opacity: 0, x: -20 }}
@@ -614,7 +614,7 @@ export default function TranslatePage() {
               {mode === 'sign-to-speech' ? (
                 <>
                   {/* Webcam Feed */}
-                  <div className="relative aspect-video glass rounded-2xl overflow-hidden">
+                  <div className="relative aspect-[4/3] md:aspect-video glass rounded-2xl overflow-hidden max-h-[50vh] md:max-h-[60vh]">
                     <WebcamFeed
                       ref={videoRef}
                       isActive={isRecording}
@@ -887,12 +887,14 @@ export default function TranslatePage() {
               ) : (
                 <>
                   {/* 3D Avatar */}
-                  <div className="md:aspect-video aspect-[3/4] glass rounded-2xl overflow-hidden min-h-[400px]">
+                  <div className="w-full glass rounded-2xl overflow-hidden">
+                    <div className="relative aspect-[4/3] md:aspect-video max-h-[60vh] md:max-h-[70vh]">
                     <HumanAvatar3D
                       signSequence={currentSign || transcript}
                       isAnimating={true}
                       useReadyPlayerMe={true}
                     />
+                    </div>
                   </div>
 
                   {/* Sign Description */}

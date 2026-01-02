@@ -51,7 +51,7 @@ const SIGN_ANIMATIONS = {
 }
 
 // Ready Player Me Avatar Component
-function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
+function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false, isMobile = false }) {
   const group = useRef<THREE.Group>(null)
   const { scene } = useGLTF(AVATAR_URL)
 
@@ -262,7 +262,7 @@ function ReadyPlayerMeAvatar({ signSequence = '', isAnimating = false }) {
   })
 
   return (
-    <group ref={group} position={[0, -0.5, 0]} scale={1.5}>
+    <group ref={group} position={[0, -0.5, 0]} scale={isMobile ? 1.2 : 1.5}>
       <primitive object={clonedScene} />
     </group>
   )
@@ -320,7 +320,7 @@ function SimpleAvatar({ signSequence = '', isAnimating = false }) {
 }
 
 // Avatar Scene Component
-function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe }) {
+function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe, isMobile }) {
   const [avatarError, setAvatarError] = useState(false)
 
   return (
@@ -350,6 +350,7 @@ function AvatarScene({ signSequence, isAnimating, useReadyPlayerMe }) {
           <ReadyPlayerMeAvatar
             signSequence={signSequence}
             isAnimating={isAnimating}
+            isMobile={isMobile}
           />
         </Suspense>
       ) : (
@@ -383,11 +384,20 @@ export default function HumanAvatar3D({
   useReadyPlayerMe = true
 }) {
   const [mounted, setMounted] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   // State for delayed subtitle clearing
   const [displaySign, setDisplaySign] = useState('')
 
   useEffect(() => {
     setMounted(true)
+    setIsMobile(window.innerWidth < 768)
+    
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   useEffect(() => {
@@ -413,10 +423,10 @@ export default function HumanAvatar3D({
     )
   }
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  // isMobile is now managed by state
 
   return (
-    <div className="relative w-full h-full bg-gray-50 overflow-hidden">
+    <div className="relative w-full h-full min-h-[300px] max-h-[80vh] bg-gray-50 overflow-hidden">
       {/* Premium Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-amber-200/40 rounded-full mix-blend-multiply filter blur-[80px] animate-float opacity-70"></div>
@@ -431,15 +441,17 @@ export default function HumanAvatar3D({
         shadows
         camera={{
           position: [0, 1.45, isMobile ? 3.5 : 2.1],
-          fov: isMobile ? 45 : 40
+          fov: isMobile ? 50 : 40
         }}
         gl={{ antialias: true, alpha: true }}
-        className="relative z-10"
+        className="relative z-10 w-full h-full"
+        style={{ touchAction: 'none' }}
       >
         <AvatarScene
           signSequence={signSequence}
           isAnimating={isAnimating}
           useReadyPlayerMe={useReadyPlayerMe}
+          isMobile={isMobile}
         />
       </Canvas>
 

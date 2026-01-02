@@ -449,12 +449,14 @@ export default function LearnPage() {
                   className="space-y-4"
                 >
                   {/* 3D Avatar */}
-                  <div className="aspect-video glass rounded-2xl overflow-hidden">
-                    <HumanAvatar3D 
-                      signSequence={selectedSign.word}
-                      isAnimating={true}
-                      useReadyPlayerMe={true}
-                    />
+                  <div className="relative w-full">
+                    <div className="aspect-[4/3] md:aspect-video glass rounded-2xl overflow-hidden max-h-[40vh] md:max-h-[50vh]">
+                      <HumanAvatar3D 
+                        signSequence={selectedSign.word}
+                        isAnimating={true}
+                        useReadyPlayerMe={true}
+                      />
+                    </div>
                   </div>
                   
                   {/* Sign Details */}
@@ -507,9 +509,11 @@ export default function LearnPage() {
                   </div>
                 </motion.div>
               ) : (
-                <div className="aspect-video glass rounded-2xl flex flex-col items-center justify-center text-gray-500">
-                  <Hand className="w-16 h-16 mb-4" />
-                  <p>Select a sign to practice</p>
+                <div className="relative w-full">
+                  <div className="aspect-[4/3] md:aspect-video glass rounded-2xl flex flex-col items-center justify-center text-gray-500 max-h-[40vh] md:max-h-[50vh]">
+                    <Hand className="w-16 h-16 mb-4" />
+                    <p>Select a sign to practice</p>
+                  </div>
                 </div>
               )}
             </div>
