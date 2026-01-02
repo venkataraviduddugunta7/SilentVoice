@@ -10,6 +10,7 @@ interface DebugPanelProps {
   currentSign: string
   connectionStatus: string
   mode: string
+  trackingData?: any
 }
 
 export default function DebugPanel({ 
@@ -17,7 +18,8 @@ export default function DebugPanel({
   confidence, 
   currentSign, 
   connectionStatus,
-  mode 
+  mode,
+  trackingData 
 }: DebugPanelProps) {
   return (
     <motion.div

@@ -195,4 +195,54 @@ class SignLanguageModel:
             
             logger.info(f"Metadata loaded from {metadata_path}")
             logger.info(f"Class names: {self.class_names}")
+    
+    def train(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32, class_names=None):
+        """
+        Train the model on provided data.
+        
+        Args:
+            X_train: Training features
+            y_train: Training labels (one-hot encoded)
+            X_val: Validation features
+            y_val: Validation labels (one-hot encoded)
+            epochs: Number of training epochs
+            batch_size: Batch size for training
+            class_names: List of class names
+            
+        Returns:
+            Training history
+        """
+        if self.model is None:
+            self.build_model()
+        
+        if class_names:
+            self.class_names = class_names
+        
+        # Add callbacks
+        callbacks = [
+            keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                patience=10,
+                restore_best_weights=True
+            ),
+            keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,
+                patience=5,
+                min_lr=0.00001
+            )
+        ]
+        
+        # Train the model
+        history = self.model.fit(
+            X_train, y_train,
+            validation_data=(X_val, y_val),
+            epochs=epochs,
+            batch_size=batch_size,
+            callbacks=callbacks,
+            verbose=1
+        )
+        
+        self.is_trained = True
+        return history
 
