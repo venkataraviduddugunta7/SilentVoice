@@ -30,6 +30,7 @@ import DebugPanel from '@/components/DebugPanel'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useMediaPipeHolistic } from '@/hooks/useMediaPipeHolistic'
+import { WEBSOCKET_URL } from '@/config/api'
 
 // Dynamically import 3D avatar to avoid SSR issues
 const HumanAvatar3D = dynamic(() => import('@/components/HumanAvatar3D'), {
@@ -67,7 +68,7 @@ export default function TranslatePage() {
     sendMessage,
     lastMessage,
     connectionStatus
-  } = useWebSocket('ws://localhost:8000/api/v1/ws/sign')
+  } = useWebSocket(WEBSOCKET_URL)
 
   const {
     transcript,

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useMediaPipeHolistic } from '@/hooks/useMediaPipeHolistic'
+import { API_ENDPOINTS } from '@/config/api'
 
 // Training data structure
 interface TrainingSession {
@@ -222,7 +223,7 @@ export default function TrainPage() {
 
     try {
       for (const session of trainingSessions) {
-        const response = await fetch('http://localhost:8000/api/v1/training/upload', {
+        const response = await fetch(API_ENDPOINTS.trainingUpload, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
