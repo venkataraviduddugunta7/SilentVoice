@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Stability Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .log {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #444;
+        }
+        .connected { border-color: #4CAF50; }
+        .disconnected { border-color: #f44336; }
+        .error { border-color: #ff9800; }
+        .message { border-color: #2196F3; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #1976D2; }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .status.connected { background: #4CAF50; }
+        .status.disconnected { background: #f44336; }
+        .status.connecting { background: #ff9800; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Connection Stability Test</h1>
+    <p>Testing: ws://3.239.255.65:8000/api/v1/ws/sign</p>
+    
+    <div id="status" class="status disconnected">Disconnected</div>
+    
+    <div>
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="sendTest()">Send Test Message</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div class="log" id="log"></div>
+    
+    <div>
+        <p>Statistics:</p>
+        <p>Connections: <span id="connections">0</span></p>
+        <p>Disconnections: <span id="disconnections">0</span></p>
+        <p>Messages Sent: <span id="sent">0</span></p>
+        <p>Messages Received: <span id="received">0</span></p>
+        <p>Errors: <span id="errors">0</span></p>
+    </div>
+
+    <script>
+        let ws = null;
+        let stats = {
+            connections: 0,
+            disconnections: 0,
+            sent: 0,
+            received: 0,
+            errors: 0
+        };
+        let reconnectAttempts = 0;
+        let heartbeatInterval = null;
+
+        function log(message, type = 'message') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStatus(status) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${status}`;
+            statusDiv.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
+        function updateStats() {
+            document.getElementById('connections').textContent = stats.connections;
+            document.getElementById('disconnections').textContent = stats.disconnections;
+            document.getElementById('sent').textContent = stats.sent;
+            document.getElementById('received').textContent = stats.received;
+            document.getElementById('errors').textContent = stats.errors;
+        }
+
+        function startHeartbeat() {
+            stopHeartbeat();
+            heartbeatInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'ping' }));
+                    stats.sent++;
+                    updateStats();
+                    log('Sent heartbeat ping', 'message');
+                }
+            }, 30000);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Already connected', 'error');
+                return;
+            }
+
+            updateStatus('connecting');
+            log('Connecting to WebSocket...', 'message');
+
+            ws = new WebSocket('ws://3.239.255.65:8000/api/v1/ws/sign');
+
+            ws.onopen = () => {
+                stats.connections++;
+                reconnectAttempts = 0;
+                updateStats();
+                updateStatus('connected');
+                log('Connected successfully!', 'connected');
+                
+                // Send initial connection message
+                ws.send(JSON.stringify({ 
+                    type: 'connection',
+                    timestamp: Date.now()
+                }));
+                stats.sent++;
+                updateStats();
+                
+                startHeartbeat();
+            };
+
+            ws.onmessage = (event) => {
+                stats.received++;
+                updateStats();
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type !== 'pong') {
+                        log(`Received: ${JSON.stringify(data)}`, 'message');
+                    }
+                } catch {
+                    log(`Received: ${event.data}`, 'message');
+                }
+            };
+
+            ws.onerror = (error) => {
+                stats.errors++;
+                updateStats();
+                log(`Error: ${error.type}`, 'error');
+            };
+
+            ws.onclose = (event) => {
+                stats.disconnections++;
+                updateStats();
+                updateStatus('disconnected');
+                stopHeartbeat();
+                log(`Disconnected: Code ${event.code}, Reason: ${event.reason || 'No reason'}`, 'disconnected');
+                
+                // Auto-reconnect logic
+                if (reconnectAttempts < 5) {
+                    reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+                    log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/5)...`, 'message');
+                    setTimeout(connect, delay);
+                }
+            };
+        }
+
+        function disconnect() {
+            reconnectAttempts = 999; // Prevent auto-reconnect
+            stopHeartbeat();
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            updateStatus('disconnected');
+            log('Manually disconnected', 'disconnected');
+        }
+
+        function sendTest() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({
+                    type: 'speech',
+                    text: 'hello',
+                    timestamp: Date.now()
+                });
+                ws.send(message);
+                stats.sent++;
+                updateStats();
+                log(`Sent: ${message}`, 'message');
+            } else {
+                log('Not connected!', 'error');
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Auto-connect on load
+        window.onload = () => {
+            connect();
+        };
+    </script>
+</body>
+</html>

@@ -27,7 +27,7 @@ import GestureVisualizer from '@/components/GestureVisualizer'
 import SpeechPanel from '@/components/SpeechPanel'
 import ConfidenceBar from '@/components/ConfidenceBar'
 import DebugPanel from '@/components/DebugPanel'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useWebSocketStable } from '@/hooks/useWebSocketStable'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useMediaPipeHolistic } from '@/hooks/useMediaPipeHolistic'
 import { WEBSOCKET_URL } from '@/config/api'
@@ -67,8 +67,13 @@ export default function TranslatePage() {
   const {
     sendMessage,
     lastMessage,
-    connectionStatus
-  } = useWebSocket(WEBSOCKET_URL)
+    connectionStatus,
+    isConnected
+  } = useWebSocketStable(WEBSOCKET_URL, {
+    reconnectInterval: 3000,
+    maxReconnectAttempts: 10,
+    heartbeatInterval: 30000
+  })
 
   const {
     transcript,
@@ -361,11 +366,24 @@ export default function TranslatePage() {
 
           <div className="flex items-center gap-3">
             {/* Connection status */}
-            <div className={`flex items-center gap-2 px-2 md:px-3 py-1 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-              }`}>
-              <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-400' : 'bg-red-400'
-                } animate-pulse`}></div>
-              <span className="text-xs md:text-sm">{connectionStatus}</span>
+            <div className={`flex items-center gap-2 px-2 md:px-3 py-1 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500/20 text-green-400' : 
+              connectionStatus === 'connecting' ? 'bg-yellow-500/20 text-yellow-400' :
+              connectionStatus === 'error' ? 'bg-red-500/20 text-red-400' :
+              'bg-gray-500/20 text-gray-400'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-400' : 
+                connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
+                connectionStatus === 'error' ? 'bg-red-400 animate-pulse' :
+                'bg-gray-400'
+              }`}></div>
+              <span className="text-xs md:text-sm">
+                {connectionStatus === 'connected' ? 'Connected' :
+                 connectionStatus === 'connecting' ? 'Connecting...' :
+                 connectionStatus === 'error' ? 'Reconnecting...' :
+                 'Disconnected'}
+              </span>
             </div>
 
             {/* Debug toggle */}
